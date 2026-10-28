@@ -9,7 +9,7 @@ $tag='v'+$version
 # Never replace a published release. A new executable requires a new version.
 $releaseJson=& gh release list --repo $repo --limit 100 --json tagName,isDraft,isPrerelease
 if($LASTEXITCODE -ne 0){throw 'No se pudieron consultar las releases existentes.'}
-$releaseList=@($releaseJson|ConvertFrom-Json|Where-Object { !$_.isDraft -and !$_.isPrerelease })
+$releaseList=@() $parsedReleases=ConvertFrom-Json -InputObject ($releaseJson -join "`n") foreach($item in $parsedReleases){  if($item -and $item.tagName -and !$item.isDraft -and !$item.isPrerelease){   $releaseList+=,$item  } }
 if(@($releaseList|Where-Object { $_.tagName -eq $tag }).Count -gt 0){Write-Host "$tag ya está publicada. Incrementá Branding.Version para publicar cambios.";exit 0}
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File app/Preparar.ps1
 if($LASTEXITCODE -ne 0){throw 'Falló la compilación o las pruebas. Revisar app/compilacion.log.'}
@@ -21,7 +21,7 @@ $names=@('PromptDesk.exe','PromptDesk.exe.config','UpdatePromptDesk.ps1','seed.x
 foreach($name in $names){Copy-Item (Join-Path $root ('app/'+$name)) (Join-Path $runtime $name)}
 $full=Join-Path $out 'PromptDesk_Windows.zip';Compress-Archive -Path (Join-Path $out 'full/PromptDesk') -DestinationPath $full -Force
 # The first release recognizes the previously shipped binaries by hash.
-$bases=@(Get-Content updates/legacy-bases.json -Raw|ConvertFrom-Json)
+$bases=ConvertFrom-Json -InputObject (Get-Content updates/legacy-bases.json -Raw)
 # Subsequent releases compare against the last complete runtime, keeping patches small.
 $prior=Join-Path $out 'prior';New-Item $prior -ItemType Directory -Force|Out-Null
 if($releaseList.Count -gt 0){
