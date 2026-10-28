@@ -9,7 +9,7 @@ $tag='v'+$version
 # Never replace a published release. A new executable requires a new version.
 $releaseJson=& gh release list --repo $repo --limit 100 --json tagName,isDraft,isPrerelease
 if($LASTEXITCODE -ne 0){throw 'No se pudieron consultar las releases existentes.'}
-$releaseList=@() $parsedReleases=ConvertFrom-Json -InputObject ($releaseJson -join "`n") foreach($item in $parsedReleases){  if($item -and $item.tagName -and !$item.isDraft -and !$item.isPrerelease){   $releaseList+=,$item  } }
+$releaseList=@(); $parsedReleases=ConvertFrom-Json -InputObject ($releaseJson -join "`n"); foreach($item in $parsedReleases){ if($item -and $item.tagName -and !$item.isDraft -and !$item.isPrerelease){ $releaseList+=,$item; } }
 if(@($releaseList|Where-Object { $_.tagName -eq $tag }).Count -gt 0){Write-Host "$tag ya está publicada. Incrementá Branding.Version para publicar cambios.";exit 0}
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File app/Preparar.ps1
 if($LASTEXITCODE -ne 0){throw 'Falló la compilación o las pruebas. Revisar app/compilacion.log.'}
