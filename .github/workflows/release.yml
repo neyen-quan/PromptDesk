@@ -1,0 +1,41 @@
+name: Compilar y publicar PromptDesk
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'scripts/**'
+      - 'updates/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promptdesk-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar, comprobar y publicar
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/Publish.ps1
+
+      - name: Conservar diagnóstico si falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico
+          path: |
+            app/compilacion.log
+            app/pruebas-error.txt
+            app/pruebas-ok.txt
