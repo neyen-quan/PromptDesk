@@ -1,0 +1,32 @@
+[
+  {
+    "version": "1.1.0",
+    "files": {
+      "PromptDesk.exe": "c717a9daf9d6ea0a46be6b79e44783120e6bf038e143af0f26c6813f163de338",
+      "PromptDesk.exe.config": "e8fbb518b6bdb1a0de7810063901639d854aca3bc1b100fe6dbd5550fea07796",
+      "LEEME.txt": "505b32d457d5f707777d5ae74d8a99ac018877f9af96b74ca0a1741cd16c2d8a",
+      "INICIAR.vbs": "340397e795281f4e17f0ac77a0fafc2f855ce3c51710dec67d2ce9f68c0224ba",
+      "INSTALAR_O_ACTUALIZAR.vbs": "87f0f0dd8b3b65c8293694ebce69c030384d7819b7159c6974abaf0d261355af",
+      "INICIAR_ALTERNATIVO.cmd": "468c2f26076ce6cbb89aef6995d9327d50ccabb26a21a4db7898b3883d06c23f"
+    }
+  },
+  {
+    "version": "1.1.0-parches-1",
+    "files": {
+      "PromptDesk.exe": "c717a9daf9d6ea0a46be6b79e44783120e6bf038e143af0f26c6813f163de338",
+      "PromptDesk.exe.config": "e8fbb518b6bdb1a0de7810063901639d854aca3bc1b100fe6dbd5550fea07796",
+      "LEEME.txt": "505b32d457d5f707777d5ae74d8a99ac018877f9af96b74ca0a1741cd16c2d8a",
+      "INICIAR.vbs": "340397e795281f4e17f0ac77a0fafc2f855ce3c51710dec67d2ce9f68c0224ba",
+      "INSTALAR_O_ACTUALIZAR.vbs": "87f0f0dd8b3b65c8293694ebce69c030384d7819b7159c6974abaf0d261355af",
+      "INICIAR_ALTERNATIVO.cmd": "468c2f26076ce6cbb89aef6995d9327d50ccabb26a21a4db7898b3883d06c23f",
+      "UpdatePromptDesk.ps1": "8665fcacc805ffa349852bcbc8bed79761c4576d37a2e92e51c26090cc9176d5"
+    }
+  },
+  {
+    "version": "1.1.1",
+    "files": {
+      "PromptDesk.exe": "d246ab6c5b30d133a940c4476811415a115dcd493b32e4ff6c9e749ff18a9d73",
+      "UpdatePromptDesk.ps1": "01b530a1c571991bb377009219cf33d71e51ceef4927ead55d9b99c21de7c285"
+    }
+  }
+]

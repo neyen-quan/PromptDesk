@@ -1,0 +1,29 @@
+PROMPTDESK — Windows 10 / 11
+
+INSTALAR
+Extraer el paquete completo y ejecutar INSTALAR_O_ACTUALIZAR.vbs.
+También se puede abrir PromptDesk.exe desde la carpeta extraída.
+No se necesitan Python, Node ni Excel.
+
+USAR
+Crear fila agrega un prompt. Crear columna agrega un campo personalizado.
+Doble clic en categoría o modelo permite elegir o crear una opción.
+Copiar copia el texto completo. Las variables se completan al copiar.
+El editor guarda automáticamente. Ctrl+Z deshace y Ctrl+Y rehace.
+Las columnas y categorías admiten orden personalizado.
+La X guarda y cierra. Minimizar conserva los atajos globales activos.
+
+ACTUALIZAR
+Actualizar > Buscar actualizaciones consulta el canal público de GitHub.
+Descarga y extrae el parche, solicita confirmación, guarda, reinicia y aplica.
+Instalar ZIP permite elegir un parche sin extraerlo manualmente.
+
+DATOS
+Catálogo: %LOCALAPPDATA%\PromptDesk\datos.xml
+Respaldos: %LOCALAPPDATA%\PromptDesk\Historial
+Los datos personales no se publican en el repositorio ni en las releases.
+Una instalación nueva empieza con un catálogo vacío. Una instalación previa
+conserva su catálogo, columnas, categorías, modelos y atajos.
+
+REPOSITORIO
+https://github.com/neyen-quan/PromptDesk

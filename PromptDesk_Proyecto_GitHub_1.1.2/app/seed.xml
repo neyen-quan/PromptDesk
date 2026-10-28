@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='utf-8'?>
+<promptdesk version="1">
+  <columns>
+    <col id="collection" title="Colección" visible="false" />
+    <col id="category" title="Categoría" visible="true" />
+    <col id="name" title="Nombre" visible="true" />
+    <col id="description" title="Descripción" visible="true" />
+    <col id="model" title="Modelo" visible="true" />
+    <col id="prompt" title="Prompt" visible="true" />
+    <col id="note" title="Nota" visible="true" />
+  </columns>
+  <categories />
+  <models />
+  <columnOrder />
+  <categoryOrder />
+  <disabledChoices />
+  <records />
+</promptdesk>
