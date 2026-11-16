@@ -5,12 +5,17 @@ Extraer el paquete completo y ejecutar INSTALAR_O_ACTUALIZAR.vbs.
 También se puede abrir PromptDesk.exe desde la carpeta extraída.
 No se necesitan Python, Node ni Excel.
 
-USAR
-Crear fila agrega un prompt. Crear columna agrega un campo personalizado.
-Doble clic en categoría o modelo permite elegir o crear una opción.
-Copiar copia el texto completo. Las variables se completan al copiar.
+USAR · BIBLIOTECA RENOVADA
+Nuevo prompt agrega una plantilla a tu biblioteca.
+Elegí una colección o categoría a la izquierda y un prompt en la lista central.
+El editor de la derecha permite trabajar con el texto y sus datos.
+La búsqueda admite varias palabras y no distingue tildes ni mayúsculas.
+Todos, Favoritos y Recientes permiten encontrar tus plantillas más rápido.
+La vista Tabla conserva las columnas personalizadas y su edición.
+Copiar prompt copia el texto completo. Las variables se completan al copiar.
 El editor guarda automáticamente. Ctrl+Z deshace y Ctrl+Y rehace.
-Las columnas y categorías admiten orden personalizado.
+Ctrl+F busca, Ctrl+N crea, Ctrl+D duplica y Ctrl+Shift+C copia el prompt.
+Las columnas y categorías conservan el orden personalizado.
 La X guarda y cierra. Minimizar conserva los atajos globales activos.
 
 ACTUALIZAR

@@ -1,0 +1,197 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Xml.Linq;
+
+namespace PromptDesk
+{
+    public static class BackendTests
+    {
+        static Store EmptyStore(string folder)
+        {
+            var database = new Store(folder);
+            database.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed.xml"));
+            return database;
+        }
+
+        static bool Fails(Action action)
+        {
+            try { action(); return false; }
+            catch { return true; }
+        }
+
+        static Entry Prompt(string name, string collection, string category, string model, string text)
+        {
+            var entry = new Entry();
+            entry.Set("name", name);
+            entry.Set("collection", collection);
+            entry.Set("category", category);
+            entry.Set("model", model);
+            entry.Set("prompt", text);
+            return entry;
+        }
+
+        public static void Run(Action<bool, string> check, string folder)
+        {
+            CheckStorage(check, Path.Combine(folder, "storage"));
+            CheckHistory(check, Path.Combine(folder, "history"));
+            CheckSearch(check);
+            CheckTemplates(check);
+        }
+
+        static void CheckStorage(Action<bool, string> check, string folder)
+        {
+            Store database = EmptyStore(folder);
+            database.Entries.Add(Prompt("Original", "Personales", "Prueba", "Modelo", "Texto intacto"));
+            database.Save();
+            byte[] bytes = File.ReadAllBytes(database.Pathname);
+            string state = database.Document().ToString();
+            XDocument invalid = database.Document();
+            invalid.Descendants("record").First().Add(new XElement("cell", new XAttribute("key", "prompt"), "Duplicado"));
+            check(Fails(() => database.ReadDocument(invalid)), "Un campo duplicado se sobrescribe silenciosamente");
+            check(database.Document().ToString() == state, "Una carga inválida modifica el catálogo en memoria");
+
+            string dtd = Path.Combine(folder, "with-dtd.xml");
+            File.WriteAllText(dtd, "<!DOCTYPE promptdesk [<!ENTITY text 'alterado'>]>" +
+                database.Document().ToString(SaveOptions.DisableFormatting));
+            check(Fails(() => database.Load(dtd)), "El catálogo acepta definiciones DTD");
+            check(database.Document().ToString() == state, "Una carga rechazada altera el estado anterior");
+
+            string otherTemporary = database.Pathname + ".tmp";
+            File.WriteAllText(otherTemporary, "archivo previo que no pertenece a este guardado");
+            database.Entries[0].Set("prompt", "Texto inválido \u0001");
+            check(Fails(database.Save), "El guardado aceptó caracteres XML inválidos");
+            check(File.ReadAllBytes(database.Pathname).SequenceEqual(bytes), "Un fallo de guardado alteró el catálogo anterior");
+            check(File.ReadAllText(otherTemporary).StartsWith("archivo previo"), "El guardado sobrescribió un temporal ajeno");
+            check(Directory.GetFiles(folder, "*.tmp").Length == 1, "El guardado fallido dejó su archivo incompleto");
+
+            database.Entries[0].Set("prompt", "\t texto con espacios \r\n\n y Unicode ñ 🚀\rúltima línea ");
+            database.Entries[0].Set("note", " \t\r\n\n ");
+            string exported = Path.Combine(folder, "streamed.xlsx");
+            File.WriteAllText(exported + ".tmp", "temporal ajeno");
+            Excel.Write(exported, database);
+            SheetData sheet = Excel.Read(exported)[0];
+            int promptColumn = database.Fields.FindIndex(field => field.Id == "prompt");
+            check(sheet.Rows[1][promptColumn] == database.Entries[0].Get("prompt"), "La exportación streaming altera espacios/Unicode");
+            check(File.ReadAllText(exported + ".tmp") == "temporal ajeno", "La exportación sobrescribió un temporal ajeno");
+            database.Save();
+            Store reread = EmptyStore(folder);
+            reread.Load(database.Pathname);
+            check(reread.Entries[0].Get("prompt") == database.Entries[0].Get("prompt"),
+                "Guardar/cargar normaliza los saltos CRLF, LF o CR del prompt");
+            check(reread.Entries[0].Get("note") == database.Entries[0].Get("note"),
+                "Guardar/cargar elimina un campo que contiene solo espacios");
+            string fullBackup = Path.Combine(folder, "exported-backup.xml");
+            database.Export(fullBackup);
+            reread.Load(fullBackup);
+            check(reread.Entries[0].Get("prompt") == database.Entries[0].Get("prompt") &&
+                reread.Entries[0].Get("note") == database.Entries[0].Get("note"),
+                "Exportar un respaldo modifica saltos de línea o espacios");
+            byte[] exportedBytes = File.ReadAllBytes(fullBackup);
+            database.Entries[0].Set("prompt", "XML inválido \u0001");
+            check(Fails(() => database.Export(fullBackup)), "La exportación XML aceptó caracteres inválidos");
+            check(File.ReadAllBytes(fullBackup).SequenceEqual(exportedBytes), "Una exportación fallida truncó el respaldo anterior");
+            check(Directory.GetFiles(folder, "exported-backup.xml.*.tmp").Length == 0,
+                "Una exportación XML fallida dejó archivos temporales");
+            check(Directory.GetFiles(Path.Combine(folder, "Historial"), "*.xml").Length == 1,
+                "Un guardado fallido agregó un respaldo vacío");
+        }
+
+        static void CheckHistory(Action<bool, string> check, string folder)
+        {
+            Store database = EmptyStore(folder);
+            const string before = "antes\r\nsegunda línea\nlínea con LF\rúltima";
+            const string after = "edición 9\r\nsegunda línea\ntercera\rúltima";
+            Entry first = Prompt("Primero", "Personales", "Retrato", "Modelo", before);
+            Entry second = Prompt("Segundo", "404", "Paisaje", "Otro", "estable");
+            database.Entries.Add(first);
+            database.Entries.Add(second);
+            string firstId = first.Id, secondId = second.Id;
+            var history = new UndoHistory(database);
+            for (int index = 0; index < 10; index++)
+            {
+                first.Set("prompt", "edición " + index + "\r\nsegunda línea\ntercera\rúltima");
+                history.Record(database, "prompt:" + first.Id);
+            }
+            first.LastUsed = "2026-11-16T12:00:00.0000000Z";
+            check(history.Undo(database), "No se puede deshacer la edición agrupada");
+            check(database.Entries[0].Get("prompt") == before, "Deshacer altera el texto o normaliza sus saltos de línea");
+            check(!history.CanUndo && history.CanRedo, "Una ráfaga de escritura creó varios pasos de historial");
+            check(database.Entries[0].LastUsed == first.LastUsed, "Deshacer elimina la fecha de uso reciente");
+            check(history.Redo(database) && database.Entries[0].Get("prompt") == after, "Rehacer no restaura el texto y sus saltos de línea exactos");
+            database.Entries[1].Set("prompt", "otro cambio");
+            history.Record(database, "prompt:" + secondId);
+            check(history.Undo(database) && database.Entries[1].Get("prompt") == "estable", "Se mezclan ediciones de prompts distintos");
+            check(database.Entries[0].Get("prompt") == after, "Deshacer un prompt alteró otro");
+
+            database.Entries[0].Set("name", "Nombre nuevo");
+            history.Record(database, "name:" + firstId);
+            check(!history.CanRedo, "Una nueva edición conserva una rama de rehacer incompatible");
+            check(history.Undo(database) && database.Entries[0].Get("name") == "Primero", "No se puede deshacer el nombre");
+            check(database.Entries[0].Get("prompt") == after, "La edición del nombre afecta al contenido");
+            check(history.Redo(database), "No se puede rehacer el nombre");
+
+            database.Fields.Add(new Field { Id = "custom_test", Title = "Referencia" });
+            database.Entries[0].Set("custom_test", "valor original");
+            database.ColumnOrder.Add("custom_test");
+            database.CategoryOrder.Add("Personales::Retrato");
+            database.DisabledChoices.Add("model::Modelo oculto");
+            history.Record(database, "");
+            check(history.Undo(database) && !database.Fields.Any(field => field.Id == "custom_test"), "Deshacer no elimina el campo recién creado");
+            check(history.Redo(database) && database.Entries[0].Get("custom_test") == "valor original" &&
+                database.ColumnOrder.Contains("custom_test") && database.CategoryOrder.Contains("Personales::Retrato") &&
+                database.DisabledChoices.Contains("model::Modelo oculto"), "Rehacer pierde ajustes o campos personalizados");
+
+            database.Entries.RemoveAt(1);
+            history.Record(database, "");
+            check(history.Undo(database) && database.Entries[1].Id == secondId, "Deshacer una eliminación pierde identidad u orden");
+            history = new UndoHistory(database);
+            for (int index = 0; index < 160; index++)
+            {
+                database.Entries[0].Set("name", "nombre " + index);
+                history.Record(database, "");
+            }
+            int undone = 0;
+            while (history.Undo(database)) undone++;
+            check(undone == 150 && database.Entries[0].Get("name") == "nombre 9", "El límite de historial no conserva los 150 cambios más recientes");
+        }
+
+        static void CheckSearch(Action<bool, string> check)
+        {
+            Entry first = Prompt("A Fotografía", "404", "Retrato", "Imagen", "Luz suave");
+            Entry second = Prompt("B Video", "Personales", "Retrato", "Video", "Calle de noche");
+            Entry third = Prompt("C Paisaje", "404", "Paisaje", "Imagen", "Luz de ciudad");
+            first.Favorite = third.Favorite = true;
+            second.LastUsed = "2026-11-16T13:00:00Z";
+            third.LastUsed = "2026-11-15T13:00:00Z";
+            third.Set("custom_reference", "Otoño");
+            var entries = new List<Entry> { third, first, second };
+            Func<string, List<Entry>> find = query => LibraryQuery.Filter(entries, "Todos", null, null, "Todos", query, "name", false);
+            check(find("FOTOGRAFIA suave").SequenceEqual(new[] { first }), "La búsqueda no combina campos o no ignora tildes/mayúsculas");
+            check(find("suave fotografia").SequenceEqual(new[] { first }), "El orden de palabras cambia la búsqueda");
+            check(find("otono").SequenceEqual(new[] { third }), "La búsqueda no encuentra campos personalizados");
+            check(find("luz retrato").SequenceEqual(new[] { first }), "Las palabras deben coincidir entre campos de un mismo prompt");
+            check(find("   ").SequenceEqual(new[] { first, second, third }), "Una búsqueda vacía no devuelve la biblioteca ordenada");
+            check(find("inexistente").Count == 0, "La búsqueda devuelve resultados ajenos");
+            check(LibraryQuery.Filter(entries, "404", "Retrato", "Imagen", "Favoritos", "", "name", false)
+                .SequenceEqual(new[] { first }), "Los filtros combinados no se respetan");
+            check(LibraryQuery.Filter(entries, null, null, null, "Recientes", "", "name", false)
+                .SequenceEqual(new[] { second, third }), "Recientes no respeta las fechas o incluye prompts sin uso");
+            check(LibraryQuery.Filter(entries, null, null, null, "Todos", "", "name", true)
+                .SequenceEqual(new[] { third, second, first }), "Orden descendente incorrecto");
+            check(entries.SequenceEqual(new[] { third, first, second }), "Una consulta reordena el catálogo original");
+        }
+
+        static void CheckTemplates(Action<bool, string> check)
+        {
+            var json = new Entry();
+            json.Set("prompt", "{\"text\":\"{{value}}\"}");
+            json.Variables.Add(new Variable { Token = "{{value}}", Value = "\u0001\b\f\n\r\t\\\"" });
+            check(Templates.Render(json) == "{\"text\":\"\\u0001\\b\\f\\n\\r\\t\\\\\\\"\"}", "Las variables JSON no escapan todos los caracteres de control");
+            json.Variables.Add(new Variable { Token = "{{value}}", Value = "duplicado" });
+            check(Fails(() => Templates.Render(json)), "Variables repetidas aceptadas");
+            check(Fails(() => Templates.Pattern("")), "Marcador vacío aceptado");
+        }
+    }
+}

@@ -1,0 +1,12 @@
+dist/
+test-results/
+app/PromptDesk.exe
+app/compilacion.log
+pruebas-*.txt
+scripts/test-install/
+scripts/test-pkg/
+scripts/sample.zip
+*.tmp
+*.log
+datos.xml
+Historial/

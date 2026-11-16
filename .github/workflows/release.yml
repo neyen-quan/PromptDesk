@@ -20,7 +20,7 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -30,12 +30,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/Publish.ps1
 
-      - name: Conservar diagnóstico si falla
-        if: failure()
+      - name: Conservar pruebas y capturas de interfaz
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostico
+          name: pruebas-PromptDesk-Windows
           path: |
             app/compilacion.log
             app/pruebas-error.txt
             app/pruebas-ok.txt
+            app/pruebas-ui-error.txt
+            test-results/**

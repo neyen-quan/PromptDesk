@@ -4,8 +4,10 @@ using System.Linq;
 using System.Xml.Linq;
 namespace PromptDesk {
 public static class Tests {
- static void Check(bool value,string message){if(!value)throw new Exception(message);}
+ static int checks;
+ static void Check(bool value,string message){checks++;if(!value)throw new Exception(message);}
  public static void Run(){
+  checks=0;
   string dir=Path.Combine(Path.GetTempPath(),"PromptDesk-test-"+Guid.NewGuid());Directory.CreateDirectory(dir);
   try {
    Check(Branding.Icon.Width==32&&Branding.Logo.Width>=256,"Recursos de identidad incompletos");
@@ -25,7 +27,8 @@ public static class Tests {
    db.Entries[0].Set("prompt",new string('x',32768));bool failed=false;try{Excel.Write(exported,db);}catch{failed=true;}Check(failed,"No se detectó límite de Excel");Check(Excel.Read(exported)[0].Rows.Count==19,"Falló preservación del Excel anterior");
    db.Fields.Add(new Field{Id="custom_upgrade",Title="Campo personal"});db.ColumnOrder.Add("custom_upgrade");db.CategoryOrder.Add("Personales::Mi categoría");db.DisabledChoices.Add("model::Mi modelo");db.Models.Add("Mi modelo");db.Entries[0].Set("custom_upgrade","valor que se conserva");db.Entries[0].Favorite=true;db.Entries[0].Hotkey="Alt+NumPad1";db.Save();reread.Load(db.Pathname);
    Check(reread.Fields.Any(f=>f.Id=="custom_upgrade")&&reread.ColumnOrder.Contains("custom_upgrade")&&reread.CategoryOrder.Contains("Personales::Mi categoría")&&reread.DisabledChoices.Contains("model::Mi modelo")&&reread.Models.Contains("Mi modelo")&&reread.Entries[0].Get("custom_upgrade")=="valor que se conserva"&&reread.Entries[0].Favorite&&reread.Entries[0].Hotkey=="Alt+NumPad1","Actualización pierde ajustes");
-   File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"pruebas-ok.txt"),"OK: carga inicial, guardado, historial, Excel ida/vuelta, Unicode, variables, JSON, duplicación, parser de atajos, exportación fallida, recursos del logo y conservación de ajustes al actualizar.\r\n"+DateTime.Now);
+   BackendTests.Run(Check,dir);
+   File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"pruebas-ok.txt"),"OK: "+checks+" verificaciones. Carga inicial, guardado atómico, historial agrupado, filtros y búsqueda, Excel ida/vuelta, Unicode, variables, JSON, duplicación, parser de atajos, exportación fallida, recursos del logo y conservación de ajustes al actualizar.\r\n"+DateTime.Now);
   }finally{Directory.Delete(dir,true);}
  }
 }
