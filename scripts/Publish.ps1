@@ -22,16 +22,34 @@ foreach($name in $names){Copy-Item (Join-Path $root ('app/'+$name)) (Join-Path $
 $full=Join-Path $out 'PromptDesk_Windows.zip';Compress-Archive -Path (Join-Path $out 'full/PromptDesk') -DestinationPath $full -Force
 # The first release recognizes the previously shipped binaries by hash.
 $bases=ConvertFrom-Json -InputObject (Get-Content updates/legacy-bases.json -Raw)
-# Subsequent releases compare against the last complete runtime, keeping patches small.
+# The stable channel serves one patch, so retain every supported published base.
+# Build against their exact full packages; never rebuild an approximate baseline.
 $prior=Join-Path $out 'prior';New-Item $prior -ItemType Directory -Force|Out-Null
+$supportedReleases=@()
+foreach ($release in $releaseList) {
+ if ($release.tagName -match '^v\d+\.\d+\.\d+$' -and [version]($release.tagName.Substring(1)) -ge [version]'1.1.3') {
+  $supportedReleases+=,$release
+ }
+}
+$supportedReleases=@($supportedReleases | Sort-Object { [version]($_.tagName.Substring(1)) })
+$publishedBases=@()
 if($releaseList.Count -gt 0){
- $last=$releaseList[0].tagName
- & gh release download $last --repo $repo --pattern PromptDesk_Windows.zip --dir $prior
- if($LASTEXITCODE -ne 0){throw 'No se pudo obtener la versión anterior para comparar archivos.'}
- Expand-Archive (Join-Path $prior 'PromptDesk_Windows.zip') (Join-Path $prior 'expanded')
- $oldRoot=Join-Path $prior 'expanded/PromptDesk';$oldFiles=@{}
- foreach($name in $names){$p=Join-Path $oldRoot $name;if(Test-Path -LiteralPath $p){$oldFiles[$name]=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()}}
- $bases=@([PSCustomObject]@{version=$last;files=[PSCustomObject]$oldFiles})
+ if ($supportedReleases.Count -eq 0) { throw 'No se encontró una base publicada compatible desde 1.1.3.' }
+ $bases=@()
+ foreach ($release in $supportedReleases) {
+  $baseTag=$release.tagName
+  $baseFolder=Join-Path $prior $baseTag
+  New-Item $baseFolder -ItemType Directory -Force|Out-Null
+  & gh release download $baseTag --repo $repo --pattern PromptDesk_Windows.zip --dir $baseFolder
+  if($LASTEXITCODE -ne 0){throw "No se pudo obtener la base publicada $baseTag."}
+  Expand-Archive (Join-Path $baseFolder 'PromptDesk_Windows.zip') (Join-Path $baseFolder 'expanded')
+  $oldRoot=Join-Path $baseFolder 'expanded/PromptDesk';$oldFiles=@{}
+  foreach($name in $names){$p=Join-Path $oldRoot $name;if(Test-Path -LiteralPath $p){$oldFiles[$name]=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()}}
+  if (!$oldFiles['PromptDesk.exe']) { throw "La base $baseTag no contiene PromptDesk.exe." }
+  $bases+=,[PSCustomObject]@{version=$baseTag;files=[PSCustomObject]$oldFiles}
+  $publishedBases+=,[PSCustomObject]@{version=$baseTag;root=$oldRoot}
+  Write-Host "Base publicada recuperada: $baseTag"
+ }
 }
 $patchRoot=Join-Path $out 'patch';$payload=Join-Path $patchRoot 'payload';New-Item $payload -ItemType Directory -Force|Out-Null
 $files=@();$exeBases=@()
@@ -39,9 +57,8 @@ foreach($base in $bases){if($base.files.'PromptDesk.exe'){$exeBases+= [string]$b
 foreach($name in @('PromptDesk.exe','PromptDesk.exe.config','UpdatePromptDesk.ps1','LEEME.txt','INSTALAR_O_ACTUALIZAR.vbs','INICIAR.vbs')){
  $path=Join-Path $runtime $name;$hash=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant();$before=@()
  foreach($base in $bases){$property=$base.files.PSObject.Properties[$name];if($property){$before+=[string]$property.Value}else{$before+=''}}
- # Include only changed files relative to the latest supported baseline. Legacy hashes
- # remain valid for those files; cumulative updates for older bases need explicit testing.
- $lastBase=$bases[$bases.Count-1];$latestProp=$lastBase.files.PSObject.Properties[$name]
+ # Include a file if any supported base differs. beforeSha256 accepts the exact
+ # published bytes from each base, including files unchanged in newer versions.
  if(@($bases|Where-Object { !$_.files.PSObject.Properties[$name] -or $_.files.PSObject.Properties[$name].Value -ne $hash }).Count -eq 0){continue}
  Copy-Item -LiteralPath $path -Destination (Join-Path $payload $name)
  $files+=@{path=$name;sha256=$hash;beforeSha256=@($before|Select-Object -Unique)}
@@ -51,9 +68,10 @@ $newExe=(Get-FileHash (Join-Path $runtime 'PromptDesk.exe') -Algorithm SHA256).H
 Copy-Item app/UpdatePromptDesk.ps1 $patchRoot
 Copy-Item scripts/APLICAR_PARCHE.vbs $patchRoot
 $patch=Join-Path $out 'PromptDesk_Parche.zip';Compress-Archive -Path (Join-Path $patchRoot '*') -DestinationPath $patch -Force
-if ($releaseList.Count -gt 0) {
- & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Package.ps1 -OldRoot $oldRoot -NewRoot $runtime -Patch $patch
- if ($LASTEXITCODE -ne 0) { throw 'Falló la actualización desde la base publicada exacta.' }
+foreach ($base in $publishedBases) {
+ Write-Host "Verificando actualización directa $($base.version) -> $tag"
+ & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Package.ps1 -OldRoot $base.root -NewRoot $runtime -Patch $patch
+ if ($LASTEXITCODE -ne 0) { throw "Falló la actualización desde la base publicada $($base.version)." }
 }
 @{product='PromptDesk';version=$version;url="https://github.com/$repo/releases/download/$tag/PromptDesk_Parche.zip";sha256=(Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()}|ConvertTo-Json|Set-Content (Join-Path $out 'latest.json') -Encoding UTF8
 $notes=@"
@@ -65,6 +83,7 @@ PromptDesk $version
 - Mejoras de guardado, historial y rendimiento; catálogo local compatible.
 - Instalación nueva: PromptDesk_Windows.zip.
 - Instalación existente: Actualizar > Buscar actualizaciones.
+- Parche acumulativo comprobado desde las versiones publicadas 1.1.3 y posteriores.
 - El catálogo y los respaldos del usuario se conservan en su PC.
 "@
 $notes|Set-Content (Join-Path $out 'notes.txt') -Encoding UTF8

@@ -3,7 +3,7 @@
 Aplicación de escritorio para Windows para organizar, editar y copiar prompts.
 C# / WinForms / .NET Framework 4.5, sin dependencias de Python, Node ni Excel.
 
-## Biblioteca renovada · 1.2.0
+## Biblioteca renovada · 1.2.1
 
 La vista principal organiza el trabajo en tres zonas: colecciones y categorías,
 lista de prompts con extractos, y editor. El nombre, la categoría y el modelo se
@@ -74,8 +74,8 @@ Cada publicación exige incrementar `Branding.Version` y sus atributos de versi�
 Al subir a `main`, GitHub Actions compila en Windows, ejecuta pruebas y publica
 una release con instalador completo, parche y `latest.json`. Si la versión ya
 está publicada no se reemplaza: se debe incrementar para publicar cambios.
-Los parches se generan contra la release anterior. Los saltos desde versiones
-antiguas requieren un paquete acumulativo explícitamente validado.
+Los parches son acumulativos desde 1.1.3: cada base publicada compatible se
+descarga y se valida con su propio actualizador antes de publicar.
 
 La publicación se prepara como borrador y se descargan sus archivos para verificar
 SHA-256 antes de activar el canal estable. Se adjuntan checksums del programa completo

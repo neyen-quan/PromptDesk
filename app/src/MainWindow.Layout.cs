@@ -277,7 +277,7 @@ namespace PromptDesk
             saveBadge = LabelAt("Guardado", 0, 5, 96, 25, 8.5f, UI.Muted); saveBadge.TextAlign = ContentAlignment.MiddleRight;
             footer.Controls.Add(editorSummary); footer.Controls.Add(saveBadge);
             var actions = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 43, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 157));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 157));
             var variables = variablesButton = UI.Button("Variables", () => Variables(selected)); variables.IconName = "braces"; variables.Quiet = true; variables.Dock = DockStyle.Fill;
             var more = moreButton = UI.Button("Más", () => promptMenu.Show(Cursor.Position)); more.IconName = "menu"; more.Quiet = true; more.Dock = DockStyle.Left; more.Width = 72;
             copyButton = UI.Button("Copiar prompt", () => Copy(selected)); copyButton.IconName = "copy"; copyButton.Dock = DockStyle.Fill;
