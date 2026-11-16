@@ -18,6 +18,17 @@ Ctrl+F busca, Ctrl+N crea, Ctrl+D duplica y Ctrl+Shift+C copia el prompt.
 Las columnas y categorías conservan el orden personalizado.
 La X guarda y cierra. Minimizar conserva los atajos globales activos.
 
+SINCRONIZAR PC Y NOTEBOOK
+Cuenta > Iniciar sesión: usá el mismo correo y contraseña de PhotoBatch.
+No necesitás crear otra cuenta. La nube compartida es Programas 404.
+La primera vinculación UNE lo local y la nube; no reemplaza una biblioteca por otra.
+Podés crear prompts en la notebook y sumar después los que ya tenés en la PC.
+En la PC actualizá primero el programa y recién después iniciá sesión.
+Esperá Sincronizado antes de cambiar de equipo; también hay Sincronizar ahora.
+Si dos equipos cambian distinto el mismo texto, conserva ambas versiones y avisa.
+Cerrar sesión conserva tus datos locales; no cierra PhotoBatch ni otros equipos.
+No copies archivos de sesión entre computadoras.
+
 ACTUALIZAR
 Actualizar > Buscar actualizaciones consulta el canal público de GitHub.
 Descarga y extrae el parche, solicita confirmación, guarda, reinicia y aplica.

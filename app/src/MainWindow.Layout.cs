@@ -54,7 +54,15 @@ namespace PromptDesk
                 Dock = DockStyle.Fill, Text = "Todo guardado · biblioteca local", ForeColor = UI.Muted,
                 Font = new Font("Segoe UI", 8.5f), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true
             };
-            shell.Controls.Add(status, 0, 2); shell.SetColumnSpan(status, 2);
+            var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340));
+            cloudStatus = new Label { Dock = DockStyle.Fill, Text = "Solo en este equipo · iniciar sesión", ForeColor = UI.Muted,
+                Font = new Font("Segoe UI", 8.5f), TextAlign = ContentAlignment.MiddleRight, AutoEllipsis = true, Cursor = Cursors.Hand,
+                AccessibleName = "Estado de sincronización" };
+            cloudStatus.Click += (s, e) => OpenCloudAccount();
+            footer.Controls.Add(status, 0, 0); footer.Controls.Add(cloudStatus, 1, 0);
+            shell.Controls.Add(footer, 0, 2); shell.SetColumnSpan(footer, 2);
             WireGridEvents();
             WireLibraryEvents();
             ResumeLayout(true);
@@ -80,7 +88,7 @@ namespace PromptDesk
             });
             var actions = new FlowLayoutPanel
             {
-                Dock = DockStyle.Right, Width = 440, WrapContents = false,
+                Dock = DockStyle.Right, Width = 610, WrapContents = false,
                 FlowDirection = FlowDirection.RightToLeft, BackColor = Color.Transparent
             };
             var update = UI.Button("Actualizar", Updates);
@@ -90,7 +98,9 @@ namespace PromptDesk
             var create = UI.Button("Nuevo prompt", AddEntry);
             create.IconName = "plus"; create.Active = true;
             tips.SetToolTip(create, "Nuevo prompt · Ctrl+N");
-            actions.Controls.Add(update); actions.Controls.Add(tools); actions.Controls.Add(create);
+            accountButton = UI.Button("Iniciar sesión", OpenCloudAccount);
+            accountButton.Quiet = true; accountButton.AccessibleName = "Cuenta Programas 404";
+            actions.Controls.Add(update); actions.Controls.Add(accountButton); actions.Controls.Add(tools); actions.Controls.Add(create);
             header.Controls.Add(actions);
             return header;
         }

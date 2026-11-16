@@ -77,14 +77,15 @@ foreach ($base in $publishedBases) {
 $notes=@"
 PromptDesk $version
 
-- Interfaz celeste renovada: categorías, biblioteca visual y editor amplio.
-- Búsqueda por varias palabras, favoritos, recientes y edición directa de metadatos.
-- Vista de tabla disponible para trabajar con columnas personalizadas.
-- Mejoras de guardado, historial y rendimiento; catálogo local compatible.
+- Sincronización privada entre PC y notebook con la misma cuenta de PhotoBatch / Programas 404.
+- Primera vinculación: une bibliotecas existentes sin reemplazar una por otra.
+- Sincroniza prompts, favoritos, variables, categorías, modelos, columnas y orden.
+- Conserva ambas versiones ante ediciones simultáneas del mismo campo.
+- Estado visible, sincronización automática, sesión cifrada y cierre con control de cambios pendientes.
 - Instalación nueva: PromptDesk_Windows.zip.
-- Instalación existente: Actualizar > Buscar actualizaciones.
+- Instalación existente: Actualizar > Buscar actualizaciones; después iniciar sesión.
 - Parche acumulativo comprobado desde las versiones publicadas 1.1.3 y posteriores.
-- El catálogo y los respaldos del usuario se conservan en su PC.
+- El catálogo y los respaldos locales se conservan. No se incluyen prompts personales en esta descarga.
 "@
 $notes|Set-Content (Join-Path $out 'notes.txt') -Encoding UTF8
 $assets=@($full,$patch,(Join-Path $out 'latest.json'))

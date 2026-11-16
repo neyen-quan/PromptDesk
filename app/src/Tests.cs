@@ -28,7 +28,9 @@ public static class Tests {
    db.Fields.Add(new Field{Id="custom_upgrade",Title="Campo personal"});db.ColumnOrder.Add("custom_upgrade");db.CategoryOrder.Add("Personales::Mi categoría");db.DisabledChoices.Add("model::Mi modelo");db.Models.Add("Mi modelo");db.Entries[0].Set("custom_upgrade","valor que se conserva");db.Entries[0].Favorite=true;db.Entries[0].Hotkey="Alt+NumPad1";db.Save();reread.Load(db.Pathname);
    Check(reread.Fields.Any(f=>f.Id=="custom_upgrade")&&reread.ColumnOrder.Contains("custom_upgrade")&&reread.CategoryOrder.Contains("Personales::Mi categoría")&&reread.DisabledChoices.Contains("model::Mi modelo")&&reread.Models.Contains("Mi modelo")&&reread.Entries[0].Get("custom_upgrade")=="valor que se conserva"&&reread.Entries[0].Favorite&&reread.Entries[0].Hotkey=="Alt+NumPad1","Actualización pierde ajustes");
    BackendTests.Run(Check,dir);
-   File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"pruebas-ok.txt"),"OK: "+checks+" verificaciones. Carga inicial, guardado atómico, historial agrupado, filtros y búsqueda, Excel ida/vuelta, Unicode, variables, JSON, duplicación, parser de atajos, exportación fallida, recursos del logo y conservación de ajustes al actualizar.\r\n"+DateTime.Now);
+   CloudMergeTests.Run(Check,dir);
+   CloudClientTests.Run(Check,dir);
+   File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"pruebas-ok.txt"),"OK: "+checks+" verificaciones. Carga inicial, guardado atómico, historial agrupado, filtros y búsqueda, Excel ida/vuelta, Unicode, variables, JSON, duplicación, parser de atajos, exportación fallida, recursos del logo conservación de ajustes al actualizar, unión entre equipos, conflictos, sesión y sincronización.\r\n"+DateTime.Now);
   }finally{Directory.Delete(dir,true);}
  }
 }

@@ -76,6 +76,24 @@ namespace PromptDesk
             Check(window.ClientRectangle.Contains(bounds), name + " queda fuera de la ventana: " + bounds);
         }
 
+        static void CloudHotkeyNotices(MainWindow window)
+        {
+            var notices = Field<System.Collections.Generic.List<string>>(window, "cloudNotices");
+            notices.Clear();
+            string[] errors = { "Prompt de prueba · Ctrl+Alt+NumPad1" };
+            Call(window, "ReportCloudHotkeyErrors", (object)errors);
+            Check(notices.Count == 1 && notices[0].Contains("Atajo no disponible"), "El atajo ocupado no genera un aviso de sincronización");
+            Call(window, "ReportCloudHotkeyErrors", (object)errors);
+            Check(notices.Count == 1, "Repetir la sincronización duplica el aviso del atajo ocupado");
+            notices.Clear(); // The user read the notice in Mi cuenta.
+            Call(window, "ReportCloudHotkeyErrors", (object)errors);
+            Check(notices.Count == 0, "Un aviso de atajo ya leído reaparece en cada sincronización");
+            Call(window, "ReportCloudHotkeyErrors", (object)new string[0]);
+            Call(window, "ReportCloudHotkeyErrors", (object)errors);
+            Check(notices.Count == 1, "Un nuevo fallo del atajo después de resolverse queda oculto");
+            notices.Clear();
+        }
+
         public static void Run(string outputFolder)
         {
             checks = 0;
@@ -122,7 +140,7 @@ namespace PromptDesk
                     window.Size = new Size(1440, 900); Pump(80);
                     Capture(window, outputFolder, "biblioteca-escritorio");
                     window.Size = new Size(1100, 700); Pump(80);
-                    foreach (string name in new[] { "search", "library", "editor", "copyButton", "entryTitle", "entryCategory", "entryModel" }) Visible(window, name);
+                    foreach (string name in new[] { "search", "library", "editor", "copyButton", "entryTitle", "entryCategory", "entryModel", "accountButton", "cloudStatus" }) Visible(window, name);
                     Check(editor.Width >= 250 && editor.Height >= 160, "El editor no tiene espacio útil en notebook");
                     Capture(window, outputFolder, "biblioteca-notebook");
 
@@ -225,6 +243,45 @@ namespace PromptDesk
                     Check(savedDuplicate.Get("category") == "Fotografía" && savedDuplicate.Get("model") == "Kling"
                         && savedDuplicate.Get("custom_ui") == "Referencia editada desde la tabla · Ω", "La edición de metadatos no persiste al reabrir el catálogo");
                     Check(reread.Fields.Any(field => field.Id == "custom_ui") && reread.ColumnOrder.Contains("custom_ui"), "Alternar vistas pierde el esquema u orden personalizado");
+
+                    // A cloud response arriving during typing must preserve those
+                    // later edits and mark them pending for the next exchange.
+                    Call(window, "ResetFilters");
+                    library.SelectedItem = duplicate; Pump(40);
+                    string sentSnapshot = CloudCatalog.Serialize(store);
+                    var server = new Store(Path.Combine(temp, "server-simulation"));
+                    server.ReadDocument(CloudCatalog.ParseDocument(sentSnapshot));
+                    var remoteEntry = new Entry(); remoteEntry.Set("name", "Agregado desde la otra PC");
+                    remoteEntry.Set("collection", "Personales"); remoteEntry.Set("prompt", "Texto remoto íntegro.");
+                    server.Entries.Add(remoteEntry);
+                    string serverSnapshot = CloudCatalog.Serialize(server);
+                    editor.Text = "Edición local mientras la sincronización estaba en curso.\r\nSegunda línea.";
+                    string lateText = editor.Text;
+                    Call(window, "ApplyCloudExchange", sentSnapshot, new CloudExchange {
+                        ServerXml = serverSnapshot, Revision = 2,
+                        Conflicts = new System.Collections.Generic.List<string>(),
+                        LocalConflictIds = new System.Collections.Generic.Dictionary<string, string>() });
+                    Check(store.Entries.Any(entry => entry.Id == remoteEntry.Id), "La respuesta de nube no incorpora el prompt remoto");
+                    Check(store.Entries.First(entry => entry.Id == duplicate.Id).Get("prompt") == lateText, "La respuesta tardía pisa lo escrito durante la sincronización");
+                    Check(Field<Entry>(window, "selected").Id == duplicate.Id && editor.Text == lateText, "La sincronización pierde la selección o el editor local");
+                    Check(Field<bool>(window, "cloudPending"), "Las ediciones tardías quedan marcadas como ya sincronizadas");
+                    Check(Field<CloudSyncState>(window, "cloudState").BaselineXml == serverSnapshot, "La base remota incluye cambios locales aún no enviados");
+                    reread.Load(reread.Pathname);
+                    Check(reread.Entries.First(entry => entry.Id == duplicate.Id).Get("prompt") == lateText, "La integración de nube no se guarda de forma durable");
+                    Check(!Field<UndoHistory>(window, "history").CanUndo, "Deshacer antiguo podría borrar prompts llegados de otro equipo");
+
+                    editor.Text = lateText + "\r\nCambio posterior al merge.";
+                    string pushedSnapshot = CloudCatalog.Serialize(store);
+                    var localHistory = Field<UndoHistory>(window, "history");
+                    Check(localHistory.CanUndo, "No queda disponible deshacer para los cambios nuevos");
+                    Call(window, "ApplyCloudExchange", pushedSnapshot, new CloudExchange {
+                        ServerXml = pushedSnapshot, Revision = 3,
+                        Conflicts = new System.Collections.Generic.List<string>(),
+                        LocalConflictIds = new System.Collections.Generic.Dictionary<string, string>() });
+                    Check(Object.ReferenceEquals(localHistory, Field<UndoHistory>(window, "history")) && localHistory.CanUndo,
+                        "Subir cambios locales sin recibir cambios remotos borra el historial de deshacer");
+                    Check(!Field<bool>(window, "cloudPending"), "Una subida confirmada queda marcada como pendiente");
+                    CloudHotkeyNotices(window);
                     window.Close();
                 }
 

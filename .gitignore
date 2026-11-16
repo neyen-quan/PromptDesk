@@ -10,3 +10,7 @@ scripts/sample.zip
 *.log
 datos.xml
 Historial/
+
+account-session.bin
+cloud-account.xml
+cloud-baseline.xml
