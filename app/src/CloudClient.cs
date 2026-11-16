@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -203,13 +204,13 @@ namespace PromptDesk
             catch (CloudException error)
             {
                 if (error.StatusCode != 401) throw;
-                await RefreshAsync().ConfigureAwait(false);
-                try { return await transport(route, body, session.AccessToken).ConfigureAwait(false); }
-                catch (CloudException retry)
-                {
-                    if (retry.StatusCode == 401) { session = null; throw LoginRequired(); }
-                    throw;
-                }
+            }
+            await RefreshAsync().ConfigureAwait(false);
+            try { return await transport(route, body, session.AccessToken).ConfigureAwait(false); }
+            catch (CloudException retry)
+            {
+                if (retry.StatusCode == 401) { session = null; throw LoginRequired(); }
+                throw;
             }
         }
 
@@ -277,6 +278,7 @@ namespace PromptDesk
                 {
                     var merged = CloudMerge.Merge(baselineXml, localXml, remote.Xml);
                     if (remote.Xml != null && CloudCatalog.Equivalent(merged.Xml, remote.Xml)) return Exchange(remote, merged);
+                    ExceptionDispatchInfo uncertainWrite = null;
                     try
                     {
                         var result = await AuthenticatedAsync("/rest/v1/rpc/promptdesk_write",
@@ -295,12 +297,14 @@ namespace PromptDesk
                         // A lost response may follow a committed write. Read it back
                         // before retrying; never blindly repeat an overwrite.
                         if (error.RequiresLogin || (error.StatusCode > 0 && error.StatusCode < 500)) throw;
-                        remote = await ReadAsync(remote.Revision).ConfigureAwait(false);
-                        if (remote.Xml != null && CloudCatalog.Equivalent(remote.Xml, merged.Xml)) return Exchange(remote, merged);
-                        if (attempt == 2) throw;
-                        continue;
+                        uncertainWrite = ExceptionDispatchInfo.Capture(error);
                     }
                     remote = await ReadAsync(remote.Revision).ConfigureAwait(false);
+                    if (uncertainWrite != null)
+                    {
+                        if (remote.Xml != null && CloudCatalog.Equivalent(remote.Xml, merged.Xml)) return Exchange(remote, merged);
+                        if (attempt == 2) uncertainWrite.Throw();
+                    }
                 }
                 throw new CloudException("La biblioteca cambió en otro equipo mientras sincronizábamos. Tus cambios están guardados en este equipo; se reintentará automáticamente.", 409);
             }

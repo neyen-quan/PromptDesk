@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -153,24 +154,32 @@ namespace PromptDesk
             bool accepted = false;
             try
             {
-                if (cloudTask != null && !cloudTask.IsCompleted) await cloudTask;
-                candidate = new CloudClient(null);
-                CloudSession session = await candidate.SignInAsync(email, password);
-                cloudVault.BindUser(session);
-                cloudVault.SaveSession(session);
-                cloudGeneration++;
-                cloudClient = candidate;
-                accepted = true;
-                cloudState = cloudVault.LoadState();
-                cloudProblem = "";
-                cloudNeedsLogin = cloudOffline = false;
-                cloudPending = cloudState.BaselineXml == null || !CloudCatalog.Equivalent(CloudCatalog.Serialize(db), cloudState.BaselineXml);
-                cloudDue = DateTime.UtcNow;
+                ExceptionDispatchInfo loginFailure = null;
+                try
+                {
+                    if (cloudTask != null && !cloudTask.IsCompleted) await cloudTask;
+                    candidate = new CloudClient(null);
+                    CloudSession session = await candidate.SignInAsync(email, password);
+                    cloudVault.BindUser(session);
+                    cloudVault.SaveSession(session);
+                    cloudGeneration++;
+                    cloudClient = candidate;
+                    accepted = true;
+                    cloudState = cloudVault.LoadState();
+                    cloudProblem = "";
+                    cloudNeedsLogin = cloudOffline = false;
+                    cloudPending = cloudState.BaselineXml == null || !CloudCatalog.Equivalent(CloudCatalog.Serialize(db), cloudState.BaselineXml);
+                    cloudDue = DateTime.UtcNow;
+                }
+                catch (Exception error) { loginFailure = ExceptionDispatchInfo.Capture(error); }
+                // C# 5 cannot await inside catch/finally. Keep cleanup awaited
+                // before releasing the account lock and rethrow the original error.
+                if (!accepted && candidate != null && candidate.Session != null)
+                    try { await candidate.SignOutAsync(); } catch { }
+                if (loginFailure != null) loginFailure.Throw();
             }
             finally
             {
-                if (!accepted && candidate != null && candidate.Session != null)
-                    try { await candidate.SignOutAsync(); } catch { }
                 cloudAccountBusy = false;
                 UpdateCloudStatus();
             }

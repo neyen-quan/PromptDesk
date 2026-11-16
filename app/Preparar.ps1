@@ -9,6 +9,7 @@ try {
     $log = & $compiler @arguments 2>&1
     $compilerExit = $LASTEXITCODE
     $log | Out-File -LiteralPath 'compilacion.log' -Encoding utf8
+    $log | Write-Output
     if ($compilerExit -ne 0) { throw 'Falló la compilación. Ver compilacion.log.' }
     $test = Start-Process -FilePath (Join-Path $PSScriptRoot 'PromptDesk.exe') -ArgumentList '--test' -Wait -PassThru
     if ($test.ExitCode -ne 0) { Remove-Item -LiteralPath 'PromptDesk.exe'; throw 'Fallaron las pruebas de integridad. Ver pruebas-error.txt.' }
@@ -20,6 +21,10 @@ try {
     Get-Content -Encoding UTF8 -LiteralPath (Join-Path $visual 'pruebas-ui-ok.txt')
     exit 0
 } catch {
+    Write-Output $_
+    foreach ($report in @('pruebas-error.txt','pruebas-ui-error.txt')) {
+        if (Test-Path -LiteralPath $report) { Get-Content -Encoding UTF8 -LiteralPath $report }
+    }
     $_ | Out-File -LiteralPath 'compilacion.log' -Append -Encoding utf8
     exit 1
 }

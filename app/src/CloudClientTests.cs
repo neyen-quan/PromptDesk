@@ -44,7 +44,8 @@ namespace PromptDesk
             public string Xml, ConcurrentXml, LastToken, LogoutRoute;
             public long Revision;
             public int Reads, Heads, Writes, Refreshes;
-            public bool LoseCommittedReply, AlwaysReject, NetworkDown, RejectRefresh, Protected401, LogoutFails;
+            public bool LoseCommittedReply, AlwaysReject, NetworkDown, RejectRefresh, Protected401, LogoutFails,
+                AlwaysUnauthorized, UncertainWriteFailure;
 
             public async Task<IDictionary<string, object>> Request(string route, IDictionary<string, object> body, string token)
             {
@@ -57,7 +58,7 @@ namespace PromptDesk
                 }
                 if (route.Contains("grant_type=password")) return SessionResponse("signed-in-access-token");
                 LastToken = token;
-                if (Protected401) { Protected401 = false; throw new CloudException("JWT vencido.", 401); }
+                if (Protected401 || AlwaysUnauthorized) { Protected401 = false; throw new CloudException("JWT vencido.", 401); }
                 if (route.StartsWith("/auth/v1/logout", StringComparison.Ordinal))
                 {
                     LogoutRoute = route;
@@ -70,6 +71,7 @@ namespace PromptDesk
                 { Reads++; return Object("revision", Revision, "catalog_xml", Xml); }
                 if (!route.EndsWith("promptdesk_write", StringComparison.Ordinal)) throw new Exception("Ruta inesperada en prueba.");
                 Writes++;
+                if (UncertainWriteFailure) throw new CloudException("Escritura no confirmada.", 503);
                 if (ConcurrentXml != null) { Xml = ConcurrentXml; ConcurrentXml = null; Revision++; }
                 if (AlwaysReject || Convert.ToInt64(body["p_expected_revision"]) != Revision)
                     return Object("accepted", false, "revision", Revision);
@@ -161,6 +163,11 @@ namespace PromptDesk
             expiredServer.Protected401 = true;
             expiredClient.SynchronizeAsync(notebook, notebook, 1).GetAwaiter().GetResult();
             check(expiredServer.Refreshes == 2 && expiredClient.Session != null, "Un JWT rechazado no renueva la sesión una sola vez");
+            var deniedServer = new Server { AlwaysUnauthorized = true };
+            var deniedClient = new CloudClient(Session(), deniedServer.Request);
+            var deniedError = Failure(() => deniedClient.SynchronizeAsync(null, notebook, 0).GetAwaiter().GetResult()) as CloudException;
+            check(deniedError != null && deniedError.RequiresLogin && deniedClient.Session == null && deniedServer.Refreshes == 1,
+                "Un segundo rechazo de JWT no cierra la sesión o renueva sin límite");
 
             var rejected = new CloudClient(Session(true), new Server { RejectRefresh = true }.Request);
             var rejection = Failure(() => rejected.SynchronizeAsync(null, notebook, 0).GetAwaiter().GetResult()) as CloudException;
@@ -185,6 +192,11 @@ namespace PromptDesk
             var conflict = Failure(() => bounded.SynchronizeAsync(null, notebook, 0).GetAwaiter().GetResult()) as CloudException;
             check(conflict != null && conflict.StatusCode == 409 && boundedServer.Writes == 3,
                 "La sincronización queda en un bucle de conflictos");
+            var uncertainServer = new Server { UncertainWriteFailure = true };
+            var uncertainClient = new CloudClient(Session(), uncertainServer.Request);
+            var uncertainError = Failure(() => uncertainClient.SynchronizeAsync(null, notebook, 0).GetAwaiter().GetResult()) as CloudException;
+            check(uncertainError != null && uncertainError.StatusCode == 503 && uncertainServer.Writes == 3 && uncertainServer.Reads == 4,
+                "Una escritura sin confirmar pierde el error original, omite verificar el servidor o reintenta sin límite");
             var rollbackServer = new Server { Xml = notebook, Revision = 1 };
             check(Failure(() => new CloudClient(Session(), rollbackServer.Request).SynchronizeAsync(notebook, notebook, 2).GetAwaiter().GetResult()) != null &&
                 rollbackServer.Writes == 0, "Una revisión remota atrasada reemplaza el catálogo");
