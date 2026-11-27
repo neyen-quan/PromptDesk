@@ -77,8 +77,8 @@ foreach ($base in $publishedBases) {
 $notes=@"
 PromptDesk $version
 
-- Archivar y restaurar prompts desde su ficha.
-- Archivados reúne el histórico de todas las colecciones y permite buscar por categoría.
+- En Asignar valores, Libre permite escribir y cada opción guardada tiene su propio botón.
+- El orden de los botones se guarda al arrastrarlos. Cada variable recuerda la última elección confirmada.
 - Las nuevas compilaciones se instalan directamente en la PC.
 - Parche acumulativo comprobado desde las versiones publicadas 1.1.3 y posteriores.
 - El catálogo y los respaldos locales se conservan. No se incluyen prompts personales en esta descarga.

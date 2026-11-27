@@ -76,16 +76,39 @@ namespace PromptDesk
             Check(window.ClientRectangle.Contains(bounds), name + " queda fuera de la ventana: " + bounds);
         }
 
-        static void VariableDialogs(MainWindow window, string outputFolder)
+        static GlassButton OptionButton(VariableChoiceStrip strip, VariableOption option)
+        {
+            return strip.Controls.OfType<GlassButton>().Single(b => Object.ReferenceEquals(b.Tag, option));
+        }
+
+        static void DragChoice(GlassButton source, GlassButton destination, bool after)
+        {
+            var start = new Point(source.Width / 2, source.Height / 2);
+            var end = source.PointToClient(destination.PointToScreen(new Point(
+                after ? destination.Width - 5 : 5, destination.Height / 2)));
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            foreach (string method in new[] { "OnMouseDown", "OnMouseMove", "OnMouseUp" })
+            {
+                var point = method == "OnMouseDown" ? start : end;
+                var args = new MouseEventArgs(MouseButtons.Left, 1, point.X, point.Y, 0);
+                source.GetType().GetMethod(method, flags).Invoke(source, new object[] { args });
+            }
+            Pump(30);
+        }
+
+        static void VariableDialogs(MainWindow window, Store store, string outputFolder)
         {
             var entry = new Entry();
             entry.Set("name", "Iluminación de estudio");
             const string template = "Escena:\n\n{{luz}}.\rFin.";
             entry.Set("prompt", template);
-            var variable = new Variable { Token = "{{luz}}", Label = "Iluminación", Value = "Luz anterior" };
-            variable.Options.Add(new VariableOption { Label = "Suave", Value = "Luz difusa\ncon sombras suaves" });
-            variable.Options.Add(new VariableOption { Label = "Directa", Value = "Luz frontal" });
+            var variable = new Variable { Token = "{{luz}}", Label = "Iluminación", Value = "Luz frontal" };
+            var soft = new VariableOption { Label = "Suave", Value = "Luz difusa\ncon sombras suaves" };
+            var direct = new VariableOption { Label = "Directa", Value = "Luz frontal" };
+            var backlight = new VariableOption { Label = "Contraluz con reflector plateado", Value = "Contraluz" };
+            variable.Options.AddRange(new[] { soft, direct, backlight });
             entry.Variables.Add(variable);
+            store.Entries.Add(entry);
             using (var form = VariableEditor.Create(entry))
             {
                 form.Show(window);
@@ -110,9 +133,21 @@ namespace PromptDesk
                 var dialog = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Text.StartsWith("Asignar valores"));
                 try
                 {
-                    var choice = (ComboBox)dialog.Controls.Find("variableChoice0", true).Single();
-                    choice.SelectedIndex = 0;
+                    var choice = (VariableChoiceStrip)dialog.Controls.Find("variableChoice0", true).Single();
                     var value = (TextBox)dialog.Controls.Find("variableValue0", true).Single();
+                    Pump(40);
+                    var free = OptionButton(choice, null);
+                    Check(choice.Controls[0] == free && free.Text == "Libre" && free.Active && !value.ReadOnly,
+                        "Una variable anterior empieza en Libre aunque su texto coincida con una opción");
+                    Check(value.Focused || dialog.ActiveControl == value, "Libre deja el campo listo para escribir al abrir");
+                    value.Text = "Borrador libre";
+                    OptionButton(choice, direct).PerformClick();
+                    free.PerformClick();
+                    Check(value.Text == "Borrador libre", "El borrador libre se conserva al alternar entre botones");
+                    OptionButton(choice, soft).PerformClick();
+                    Check(choice.SelectedOption == soft && OptionButton(choice, soft).Active &&
+                        choice.Controls.OfType<GlassButton>().Count(button => button.Active) == 1,
+                        "La botonera deja una sola opción seleccionada");
                     Check(value.ReadOnly && value.Text == "Luz difusa\r\ncon sombras suaves", "Elegir una opción muestra sus dos líneas");
                     using (var bitmap = new Bitmap(dialog.Width, dialog.Height))
                     {
@@ -125,20 +160,53 @@ namespace PromptDesk
             });
             Call(window, "Copy", entry);
             if (dialogError != null) throw dialogError;
-            Check(variable.Value == variable.Options[0].Value && Clipboard.GetText() == "Escena:\r\n\r\nLuz difusa\r\ncon sombras suaves.\r\nFin.",
+            Check(soft.Selected && variable.Value == soft.Value && Clipboard.GetText() == "Escena:\r\n\r\nLuz difusa\r\ncon sombras suaves.\r\nFin.",
                 "Copiar usa el texto de la opción, con sus saltos de línea");
             Check(entry.Get("prompt") == template, "Copiar conserva el marcador y los separadores originales en la plantilla");
+            var second = new Variable { Token = "{{fondo}}", Label = "Fondo", Value = "Blanco" };
+            second.Options.Add(new VariableOption { Label = "Negro", Value = "Fondo oscuro" });
+            entry.Variables.Add(second);
             using (var form = window.CreateVariableValuesDialog(entry))
             {
+                form.Width = 400;
                 form.Show(window); Pump(50);
-                var choice = (ComboBox)form.Controls.Find("variableChoice0", true).Single();
+                var choice = (VariableChoiceStrip)form.Controls.Find("variableChoice0", true).Single();
                 var value = (TextBox)form.Controls.Find("variableValue0", true).Single();
-                Check(choice.SelectedIndex == 0, "Volver a copiar recuerda la opción elegida");
-                choice.SelectedIndex = choice.Items.Count - 1;
+                var other = (VariableChoiceStrip)form.Controls.Find("variableChoice1", true).Single();
+                Check(choice.SelectedOption == soft, "Volver a copiar recuerda el botón confirmado");
+                var free = OptionButton(choice, null);
+                var last = OptionButton(choice, backlight);
+                Check(last.Top > free.Top && last.Bottom <= choice.ClientSize.Height,
+                    "Al estrechar la ventana los botones pasan a otra fila y siguen visibles");
+                DragChoice(free, last, true);
+                DragChoice(OptionButton(choice, direct), OptionButton(other, second.Options[0]), false);
+                Check(choice.Controls[0] == free && variable.Options.SequenceEqual(new[] { soft, direct, backlight })
+                    && second.Options.Count == 1, "Libre queda fijo y las opciones se arrastran solo dentro de su marcador");
+                DragChoice(OptionButton(choice, soft), last, true);
+                Check(variable.Options.SequenceEqual(new[] { direct, backlight, soft }) && choice.SelectedOption == soft
+                    && choice.Controls[0] == free && choice.Controls[3].Tag == soft,
+                    "Arrastrar entre filas cambia el orden manteniendo Libre primero y la opción seleccionada");
+                free.PerformClick();
                 Check(!value.ReadOnly, "Texto libre permite escribir un valor personalizado");
                 value.Text = "Luz lateral";
                 ((GlassButton)form.Controls.Find("cancelVariableValues", true).Single()).PerformClick();
-                Check(variable.Value == variable.Options[0].Value, "Cancelar conserva el último valor confirmado");
+                Check(soft.Selected && variable.Value == soft.Value, "Cancelar conserva la última selección confirmada");
+            }
+            var reread = new Store(store.Folder);
+            reread.Load(reread.Pathname);
+            var saved = reread.Entries.Single(e => e.Id == entry.Id).Variables[0];
+            Check(saved.Options.Select(o => o.Label).SequenceEqual(variable.Options.Select(o => o.Label))
+                && saved.Options.Single(o => o.Selected).Label == soft.Label,
+                "El orden arrastrado y la elección confirmada se conservan en disco tras cerrar");
+            using (var form = window.CreateVariableValuesDialog(entry))
+            {
+                form.Show(window); Pump(40);
+                var choice = (VariableChoiceStrip)form.Controls.Find("variableChoice0", true).Single();
+                OptionButton(choice, null).PerformClick();
+                ((TextBox)form.Controls.Find("variableValue0", true).Single()).Text = direct.Value;
+                ((GlassButton)form.Controls.Find("confirmVariableValues", true).Single()).PerformClick();
+                Check(variable.Value == direct.Value && !variable.Options.Any(option => option.Selected),
+                    "Confirmar Libre recuerda ese modo aunque se escriba el mismo texto que una opción");
             }
         }
 
@@ -448,7 +516,7 @@ namespace PromptDesk
                         "Subir cambios locales sin recibir cambios remotos borra el historial de deshacer");
                     Check(!Field<bool>(window, "cloudPending"), "Una subida confirmada queda marcada como pendiente");
                     CloudHotkeyNotices(window);
-                    VariableDialogs(window, outputFolder);
+                    VariableDialogs(window, store, outputFolder);
                     VariableEditorTests.Run(window);
                     window.Close();
                 }

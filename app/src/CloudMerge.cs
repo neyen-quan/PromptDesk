@@ -128,7 +128,8 @@ namespace PromptDesk
                         Children(variable, "option");
                         foreach (XElement option in variable.Elements("option"))
                         {
-                            Attributes(option, "label", "value");
+                            Attributes(option, "label", "value", "selected");
+                            BooleanAttribute(option, "selected");
                             Children(option);
                             if (String.IsNullOrWhiteSpace((string)option.Attribute("label")) ||
                                 String.IsNullOrWhiteSpace((string)option.Attribute("value")))

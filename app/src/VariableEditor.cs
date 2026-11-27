@@ -45,8 +45,16 @@ namespace PromptDesk
             foreach (var variable in entry.Variables)
             {
                 int i = grid.Rows.Add(variable.Token, variable.Label, variable.Value, variable.Options.Count);
-                grid.Rows[i].Tag = new List<VariableOption>(variable.Options);
+                grid.Rows[i].Tag = variable.Options.Select(o => o.Clone()).ToList();
             }
+            grid.CellValueChanged += (sender, args) => {
+                if (args.RowIndex < 0 || args.ColumnIndex != grid.Columns["value"].Index) return;
+                var row = grid.Rows[args.RowIndex];
+                var options = row.Tag as List<VariableOption>;
+                var chosen = options == null ? null : options.FirstOrDefault(o => o.Selected);
+                if (chosen != null && Convert.ToString(row.Cells["value"].Value) != chosen.Value)
+                    chosen.Selected = false;
+            };
             form.Shown += delegate {
                 grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
                 grid.AutoResizeRows(DataGridViewAutoSizeRowsMode.AllCellsExceptHeaders);
@@ -65,6 +73,8 @@ namespace PromptDesk
                     if (editor.ShowDialog(form) != DialogResult.OK) return;
                     row.Tag = options;
                     row.Cells["options"].Value = options.Count;
+                    var chosen = options.FirstOrDefault(o => o.Selected);
+                    if (chosen != null) row.Cells["value"].Value = chosen.Value;
                 }
             });
             optionsButton.Name = "editVariableOptions";
@@ -110,7 +120,7 @@ namespace PromptDesk
         internal static Form CreateOptions(string field, List<VariableOption> options)
         {
             var form = UI.Dialog("Opciones · " + field, 740, 450);
-            var drafts = options.Select(o => new VariableOption { Label = o.Label, Value = o.Value }).ToList();
+            var drafts = options.Select(o => o.Clone()).ToList();
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, Padding = new Padding(12) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68));

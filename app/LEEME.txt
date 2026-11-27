@@ -17,7 +17,9 @@ a mostrar la plantilla en su categoría y reactiva su atajo si lo tenía asignad
 La vista Tabla conserva las columnas personalizadas y su edición.
 Copiar prompt copia el texto completo. Las variables se completan al copiar.
 En Variables, seleccioná el marcador y abrí Editar opciones. Agregá cada nombre
-y su texto de reemplazo. Al copiar, elegí una opción guardada o Texto libre.
+y su texto de reemplazo. Al copiar, pulsá Libre para escribir o elegí una opción.
+Arrastrá los botones para ordenarlos. Libre siempre ocupa el primer lugar.
+Cada variable recuerda su orden y la última elección confirmada al copiar.
 El editor guarda automáticamente. Ctrl+Z deshace y Ctrl+Y rehace.
 Ctrl+F busca, Ctrl+N crea, Ctrl+D duplica y Ctrl+Shift+C copia el prompt.
 Las columnas y categorías conservan el orden personalizado.

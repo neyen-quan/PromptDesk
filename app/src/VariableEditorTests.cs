@@ -10,8 +10,8 @@ namespace PromptDesk
         {
             var entry = new Entry();
             entry.Set("prompt", "Foto {{color}}");
-            var variable = new Variable { Token = "{{color}}", Label = "Color" };
-            variable.Options.Add(new VariableOption { Label = "Gris", Value = "Gris claro" });
+            var variable = new Variable { Token = "{{color}}", Label = "Color", Value = "Gris claro" };
+            variable.Options.Add(new VariableOption { Label = "Gris", Value = "Gris claro", Selected = true });
             entry.Variables.Add(variable);
             const string multiline = "Rosa suave.\r\nFondo de estudio.";
 
@@ -24,9 +24,10 @@ namespace PromptDesk
                     Click(options, "acceptVariableOptions");
                 });
                 Check(OptionCount(variables) == 2, "Aceptar debe actualizar la cantidad en la fila.");
+                Find<DataGridView>(variables, "VariableGrid").Rows[0].Cells["value"].Value = "Valor descartado";
                 variables.CancelButton.PerformClick();
             }
-            Check(variable.Options.Count == 1 && entry.Variables[0] == variable,
+            Check(variable.Options.Count == 1 && entry.Variables[0] == variable && variable.Options[0].Selected,
                 "Cancelar el editor de variables debe conservar la configuración original.");
 
             using (var variables = VariableEditor.Create(entry))
@@ -42,6 +43,7 @@ namespace PromptDesk
                         && Find<TextBox>(options, "OptionValue").Text == "Gris claro",
                         "Cancelar opciones debe descartar tanto las ediciones como las eliminaciones.");
                     Find<TextBox>(options, "OptionLabel").Text = "Gris cálido";
+                    Find<TextBox>(options, "OptionValue").Text = "Gris de estudio";
                     AddOption(options, "Sobrante", "Quitar");
                     Click(options, "removeVariableOption");
                     AddOption(options, "Rosa", multiline);
@@ -52,9 +54,18 @@ namespace PromptDesk
                 Check(variables.DialogResult == DialogResult.OK, "Guardar debe aceptar el editor de variables.");
             }
             var saved = entry.Variables.Single().Options;
-            Check(saved.Count == 2 && saved[0].Label == "Gris cálido" && saved[0].Value == "Gris claro"
+            Check(saved.Count == 2 && saved[0].Label == "Gris cálido" && saved[0].Value == "Gris de estudio"
+                && saved[0].Selected && entry.Variables[0].Value == saved[0].Value
                 && saved[1].Label == "Rosa" && saved[1].Value == multiline,
                 "Guardar debe conservar nombres, orden y texto completo de las opciones.");
+            using (var variables = VariableEditor.Create(entry))
+            {
+                variables.Show(owner);
+                Find<DataGridView>(variables, "VariableGrid").Rows[0].Cells["value"].Value = "Texto a mano";
+                Click(variables, "saveVariables");
+            }
+            Check(entry.Variables[0].Value == "Texto a mano" && !entry.Variables[0].Options.Any(o => o.Selected),
+                "Editar manualmente el valor predeterminado debe seleccionar Libre.");
         }
 
         static void EditOptions(Form variables, Action<Form> change)

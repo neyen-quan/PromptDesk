@@ -128,10 +128,20 @@ namespace PromptDesk
             check(restored.Options.Select(option => option.Label).SequenceEqual(new[] { "Por debajo", "Sin collar" }) &&
                 restored.Options[0].Value == longValue && restored.Value == "A mano",
                 "El catálogo altera las opciones de una variable o reemplaza su último valor");
+            check(restored.Options.All(option => !option.Selected) && !restored.Xml().Descendants().Attributes("selected").Any(),
+                "Las opciones sin selección guardada se abren en Libre");
             Entry copy = loaded.Clone();
             copy.Variables[0].Options[0].Value = "Otro texto";
             check(restored.Options[0].Value == longValue, "El duplicado comparte sus opciones con el original");
             restored.Value = restored.Options[0].Value;
+            restored.Options[0].Selected = true;
+            restored.Options.Reverse();
+            database.Save();
+            database.Load(database.Pathname);
+            Variable reopened = database.Entries.Single().Variables.Single();
+            check(reopened.Options[0].Label == "Sin collar" && !reopened.Options[0].Selected &&
+                reopened.Options[1].Label == "Por debajo" && reopened.Options[1].Selected && reopened.Value == longValue,
+                "Reabrir recupera el orden elegido y el botón seleccionado independientemente de su posición");
             check(Templates.Render(loaded) == "Modo: " + longValue && loaded.Get("prompt") == "Modo: {{collar}}",
                 "La opción elegida no conserva su texto al sustituir el marcador");
         }

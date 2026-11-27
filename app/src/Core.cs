@@ -18,6 +18,12 @@ namespace PromptDesk
     public class VariableOption
     {
         public string Label = "", Value = "";
+        public bool Selected;
+
+        internal VariableOption Clone()
+        {
+            return new VariableOption { Label = Label, Value = Value, Selected = Selected };
+        }
     }
 
     public class Variable
@@ -29,12 +35,13 @@ namespace PromptDesk
         {
             return new XElement("var", new XAttribute("token", Token), new XAttribute("label", Label),
                 new XAttribute("value", Value), Options.Select(option => new XElement("option",
-                    new XAttribute("label", option.Label), new XAttribute("value", option.Value))));
+                    new XAttribute("label", option.Label), new XAttribute("value", option.Value),
+                    option.Selected ? new XAttribute("selected", true) : null)));
         }
 
         internal static Variable Read(XElement element)
         {
-            return new Variable
+            var variable = new Variable
             {
                 Token = (string)element.Attribute("token") ?? "",
                 Label = (string)element.Attribute("label") ?? "",
@@ -42,9 +49,13 @@ namespace PromptDesk
                 Options = element.Elements("option").Select(option => new VariableOption
                 {
                     Label = (string)option.Attribute("label") ?? "",
-                    Value = (string)option.Attribute("value") ?? ""
+                    Value = (string)option.Attribute("value") ?? "",
+                    Selected = (string)option.Attribute("selected") == "true"
                 }).ToList()
             };
+            if (variable.Options.Count(option => option.Selected) > 1)
+                throw new InvalidDataException("Una variable tiene más de una opción seleccionada.");
+            return variable;
         }
     }
 

@@ -229,14 +229,17 @@ namespace PromptDesk
             string whitespace = Document(spaced);
             string withOptions = Change(whitespace, c => {
                 var options = c.Entries[0].Variables[0].Options;
-                options.Add(new VariableOption { Label = "Luz suave", Value = mixed });
+                options.Add(new VariableOption { Label = "Luz suave", Value = mixed, Selected = true });
                 options.Add(new VariableOption { Label = "Luz intensa", Value = "Luz & reflejos" });
             });
             string remoteNote = Change(whitespace, c => c.Entries[0].Set("note", "Cambio remoto"));
             var mergedOptions = Record(CloudMerge.Merge(whitespace, withOptions, remoteNote).Xml, spaced.Id);
             check(mergedOptions.Get("note") == "Cambio remoto" && mergedOptions.Variables[0].Options.Count == 2 &&
-                mergedOptions.Variables[0].Options[0].Value == mixed && mergedOptions.Variables[0].Options[1].Label == "Luz intensa",
+                mergedOptions.Variables[0].Options[0].Value == mixed && mergedOptions.Variables[0].Options[0].Selected &&
+                mergedOptions.Variables[0].Options[1].Label == "Luz intensa" && !mergedOptions.Variables[0].Options[1].Selected,
                 "La sincronización combina opciones multilínea con una edición independiente del otro equipo");
+            check(Rejects(() => CloudCatalog.Validate(withOptions.Replace("label=\"Luz intensa\"", "label=\"Luz intensa\" selected=\"true\""))),
+                "La nube detecta una variable con dos botones seleccionados");
             var roundtrip = CloudCatalog.Read(CloudMerge.Merge(null, whitespace, empty).Xml).Entries.Single();
             check(roundtrip.Get("prompt") == mixed && roundtrip.Get("note") == " \r\n ", "Sincronización conserva Unicode y saltos CRLF, CR, LF y espacios");
             check(roundtrip.Variables[0].Value == mixed && roundtrip.Variables[0].Label == "Etiqueta\r\nNueva", "Variables conservan saltos de línea en atributos XML");

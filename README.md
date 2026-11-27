@@ -36,7 +36,7 @@ herramientas menos frecuentes están agrupadas en menús.
 - Archivar desde **Más** y consultar el histórico en **Archivados**. Restaurar devuelve el prompt a su colección y categoría con sus variables y favorito. El atajo global queda en pausa durante el archivo.
 - Usar **Lista** para recorrer contenido y **Tabla** para editar columnas personalizadas.
 - Guardado automático, deshacer/rehacer, variables al copiar y atajos globales.
-- En **Variables**, seleccioná el marcador y abrí **Editar opciones…**. Guardá un nombre y el texto de reemplazo de cada alternativa. Al copiar, elegí por nombre o seleccioná **Texto libre**.
+- En **Variables**, seleccioná el marcador y abrí **Editar opciones…**. Guardá un nombre y el texto de reemplazo de cada alternativa. Al copiar, **Libre** es el primer botón y permite escribir. Los demás botones usan los textos guardados. Arrastralos para cambiar su orden. Cada variable recuerda el orden y la última opción que confirmaste al copiar.
 - Mantener categorías, modelos, orden y campos existentes sin cambiar el formato del catálogo.
 
 El diseño toma como referencias de organización a
@@ -56,9 +56,8 @@ También admite uso portable desde la carpeta extraída.
 
 Las actualizaciones se aplican directamente en la PC. Cerrá PromptDesk para
 instalar la compilación probada en su carpeta de ejecución. La biblioteca y
-los respaldos se guardan por separado. Si usás opciones de variables en dos
-equipos, actualizá ambos a 1.3.1 o una versión posterior. Para sincronizar
-prompts archivados, usá 1.3.3 o una versión posterior en ambos equipos.
+los respaldos se guardan por separado. Para usar la botonera y sincronizar
+la opción seleccionada entre equipos, actualizá ambos a 1.3.4 o posterior.
 
 ## Datos personales
 
