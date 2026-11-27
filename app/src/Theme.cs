@@ -10,8 +10,18 @@ public static class Glass {
 }
 public class GlassPanel:Panel {public GlassPanel(){DoubleBuffered=true;BackColor=Color.Transparent;}protected override void OnPaintBackground(PaintEventArgs e){base.OnPaintBackground(e);Glass.Surface(e.Graphics,ClientRectangle);}}
 public class GlassFlow:FlowLayoutPanel {public GlassFlow(){DoubleBuffered=true;BackColor=Color.Transparent;}protected override void OnPaintBackground(PaintEventArgs e){base.OnPaintBackground(e);Glass.Surface(e.Graphics,ClientRectangle);}}
+internal static class VariableDialogColors
+{
+ public static readonly Color Background = Color.FromArgb(252, 246, 233);
+ public static readonly Color Surface = Color.FromArgb(242, 230, 210);
+ public static readonly Color Field = Color.FromArgb(255, 252, 245);
+ public static readonly Color Ink = Color.FromArgb(61, 40, 28);
+ public static readonly Color Accent = Color.FromArgb(151, 59, 24);
+ public static readonly Color Selected = Color.FromArgb(248, 216, 191);
+ public static readonly Color Border = Color.FromArgb(190, 151, 120);
+}
 public class GlassButton:Control,IButtonControl {
- bool hover,pressed;public bool Primary,Quiet,Active;public string IconName="";public ContentAlignment TextAlign=ContentAlignment.MiddleCenter;public DialogResult DialogResult{get;set;}
+ bool hover,pressed;internal bool Warm;public bool Primary,Quiet,Active;public string IconName="";public ContentAlignment TextAlign=ContentAlignment.MiddleCenter;public DialogResult DialogResult{get;set;}
  public GlassButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.SupportsTransparentBackColor|ControlStyles.Selectable|ControlStyles.StandardClick,true);Cursor=Cursors.Hand;BackColor=Color.Transparent;ForeColor=UI.Ink;Font=new Font("Segoe UI",9.5f);Padding=new Padding(12,5,12,5);Margin=new Padding(4);AutoSize=true;Height=38;TabStop=true;AccessibleRole=AccessibleRole.PushButton;}
  public override Size GetPreferredSize(Size proposedSize){var size=TextRenderer.MeasureText(Text,Font);return new Size(Math.Max(74,size.Width+Padding.Horizontal+8+(IconName.Length>0?23:0)),Math.Max(38,size.Height+Padding.Vertical+6));}
  public void NotifyDefault(bool value){Invalidate();}
@@ -28,11 +38,17 @@ public class GlassButton:Control,IButtonControl {
   Color fill=Primary?(pressed?Color.FromArgb(72,174,200):hover?Color.FromArgb(147,229,246):UI.Accent):
       Active?UI.Selected:pressed?Color.FromArgb(35,56,75):hover?Color.FromArgb(30,44,59):Quiet?Color.Transparent:Color.FromArgb(27,40,54);
   if(!Enabled&&Primary)fill=Color.FromArgb(37,70,83);
+  if (Warm)
+   fill = Primary ? (Enabled ? (pressed ? Color.FromArgb(113, 43, 17) : hover ? Color.FromArgb(136, 51, 20) : VariableDialogColors.Accent) : VariableDialogColors.Border)
+    : Active ? VariableDialogColors.Selected : pressed || hover ? VariableDialogColors.Surface : VariableDialogColors.Field;
+  Color border = Focused ? UI.Accent : Active ? Color.FromArgb(53,103,122) : UI.Line;
+  if (Warm) border = Focused || Active ? VariableDialogColors.Accent : VariableDialogColors.Border;
   using(var path=Glass.Round(r,8)){
    if(fill!=Color.Transparent)using(var brush=new SolidBrush(fill))e.Graphics.FillPath(brush,path);
-   if(!Quiet||Active||Focused)using(var pen=new Pen(Focused?UI.Accent:Active?Color.FromArgb(53,103,122):UI.Line))e.Graphics.DrawPath(pen,path);
+   if(!Quiet||Active||Focused)using(var pen=new Pen(border))e.Graphics.DrawPath(pen,path);
   }
   Color ink=!Enabled?Color.FromArgb(103,127,145):Primary?Color.FromArgb(10,37,49):Active?UI.Accent:UI.Ink;
+  if (Warm) ink = Primary ? Color.White : Active ? VariableDialogColors.Accent : VariableDialogColors.Ink;
   int iconWidth=IconName.Length>0?23:0;
   var textBounds=new Rectangle(10+iconWidth,2,Math.Max(1,Width-20-iconWidth),Height-4);
   if(IconName.Length>0){int x=Text.Length==0?(Width-17)/2:12;Glyph.Draw(e.Graphics,IconName,new Rectangle(x,(Height-17)/2,17,17),ink);}

@@ -168,8 +168,9 @@ namespace PromptDesk
             entry.Variables.Add(second);
             using (var form = window.CreateVariableValuesDialog(entry))
             {
+                form.Show(window);
                 form.Width = 400;
-                form.Show(window); Pump(50);
+                Pump(50);
                 var choice = (VariableChoiceStrip)form.Controls.Find("variableChoice0", true).Single();
                 var value = (TextBox)form.Controls.Find("variableValue0", true).Single();
                 var other = (VariableChoiceStrip)form.Controls.Find("variableChoice1", true).Single();
@@ -207,6 +208,47 @@ namespace PromptDesk
                 ((GlassButton)form.Controls.Find("confirmVariableValues", true).Single()).PerformClick();
                 Check(variable.Value == direct.Value && !variable.Options.Any(option => option.Selected),
                     "Confirmar Libre recuerda ese modo aunque se escriba el mismo texto que una opción");
+            }
+        }
+
+        static void VariableDialogFit(MainWindow window, string outputFolder)
+        {
+            var entry = new Entry();
+            entry.Set("name", "Vista del paseo");
+            foreach (int count in new[] { 6, 20 })
+            {
+                var variable = new Variable { Label = "Detalle del paseo", Value = "Automático" };
+                for (int i = 0; i < count; i++)
+                    variable.Options.Add(new VariableOption { Label = "Alternativa del paseo " + i, Value = "Opción " + i });
+                entry.Variables.Add(variable);
+            }
+            using (var form = window.CreateVariableValuesDialog(entry))
+            {
+                form.Show(window); Pump(50);
+                var scroll = (Panel)form.Controls.Find("variableValuesScroll", true).Single();
+                var last = form.Controls.Find("variableValue1", true).Single();
+                var area = Screen.FromControl(window).WorkingArea;
+                int margin = (int)Math.Ceiling(area.Width / 10.0);
+                Check(area.Contains(form.Bounds) && form.Left >= area.Left + margin && form.Right <= area.Right - margin,
+                    "El diálogo deja un margen lateral del diez por ciento a cada lado del monitor");
+                Check(!scroll.VerticalScroll.Visible && scroll.RectangleToScreen(scroll.ClientRectangle).Contains(last.RectangleToScreen(last.ClientRectangle)),
+                    "Las seis y veinte opciones y el último campo quedan visibles al abrir");
+                Check(form.BackColor == VariableDialogColors.Background &&
+                    ((GlassButton)form.Controls.Find("confirmVariableValues", true).Single()).Warm,
+                    "El diálogo de copiar usa la paleta crema");
+                using (var bitmap = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                    bitmap.Save(Path.Combine(outputFolder, "copiar-con-muchas-opciones.png"), ImageFormat.Png);
+                }
+            }
+            for (int i = 0; i < 25; i++) entry.Variables.Add(new Variable { Label = "Otra variable", Value = "Valor" });
+            using (var form = window.CreateVariableValuesDialog(entry))
+            {
+                form.Show(window); Pump(50);
+                var scroll = (Panel)form.Controls.Find("variableValuesScroll", true).Single();
+                Check(scroll.VerticalScroll.Visible && Screen.FromControl(window).WorkingArea.Contains(form.Bounds),
+                    "Una lista que excede la pantalla conserva el desplazamiento");
             }
         }
 
@@ -696,6 +738,7 @@ namespace PromptDesk
                     Check(!Field<bool>(window, "cloudPending"), "Una subida confirmada queda marcada como pendiente");
                     CloudHotkeyNotices(window);
                     VariableDialogs(window, store, outputFolder);
+                    VariableDialogFit(window, outputFolder);
                     VariableEditorTests.Run(window);
                     window.Close();
                 }

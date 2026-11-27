@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace PromptDesk
@@ -39,7 +40,7 @@ namespace PromptDesk
         {
             var button = new GlassButton {
                 Text = option == null ? "Libre" : option.Label,
-                Tag = option, Active = option == null, AutoSize = false,
+                Tag = option, Active = option == null, AutoSize = false, Warm = true,
                 AccessibleRole = AccessibleRole.RadioButton,
                 Margin = new Padding(0, 0, 5, 4), TabIndex = Controls.Count
             };
@@ -75,6 +76,11 @@ namespace PromptDesk
         {
             foreach (GlassButton button in Controls)
                 if (button.Active) { button.Focus(); return; }
+        }
+
+        internal int SingleRowWidth
+        {
+            get { return Padding.Horizontal + Controls.Cast<Control>().Sum(button => button.Width + button.Margin.Horizontal); }
         }
 
         // Bound the auto-sized row to its table column, so a long list wraps
@@ -170,7 +176,7 @@ namespace PromptDesk
             base.OnPaint(e);
             if (!insertionMark.IsEmpty)
             {
-                using (var brush = new SolidBrush(UI.Accent)) e.Graphics.FillRectangle(brush, insertionMark);
+                using (var brush = new SolidBrush(VariableDialogColors.Accent)) e.Graphics.FillRectangle(brush, insertionMark);
             }
         }
 
