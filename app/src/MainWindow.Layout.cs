@@ -88,11 +88,9 @@ namespace PromptDesk
             });
             var actions = new FlowLayoutPanel
             {
-                Dock = DockStyle.Right, Width = 610, WrapContents = false,
+                Dock = DockStyle.Right, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
                 FlowDirection = FlowDirection.RightToLeft, BackColor = Color.Transparent
             };
-            var update = UI.Button("Actualizar", Updates);
-            update.Name = "updateButton"; update.IconName = "refresh"; update.Quiet = true;
             var tools = UI.Button("Biblioteca", () => libraryMenu.Show(Cursor.Position));
             tools.IconName = "menu"; tools.Quiet = true;
             var create = UI.Button("Nuevo prompt", AddEntry);
@@ -100,7 +98,7 @@ namespace PromptDesk
             tips.SetToolTip(create, "Nuevo prompt · Ctrl+N");
             accountButton = UI.Button("Iniciar sesión", OpenCloudAccount);
             accountButton.Quiet = true; accountButton.AccessibleName = "Cuenta Programas 404";
-            actions.Controls.Add(update); actions.Controls.Add(accountButton); actions.Controls.Add(tools); actions.Controls.Add(create);
+            actions.Controls.Add(accountButton); actions.Controls.Add(tools); actions.Controls.Add(create);
             header.Controls.Add(actions);
             return header;
         }

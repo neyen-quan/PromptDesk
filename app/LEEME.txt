@@ -13,6 +13,8 @@ La búsqueda admite varias palabras y no distingue tildes ni mayúsculas.
 Todos, Favoritos y Recientes permiten encontrar tus plantillas más rápido.
 La vista Tabla conserva las columnas personalizadas y su edición.
 Copiar prompt copia el texto completo. Las variables se completan al copiar.
+En Variables, seleccioná el marcador y abrí Editar opciones. Agregá cada nombre
+y su texto de reemplazo. Al copiar, elegí una opción guardada o Texto libre.
 El editor guarda automáticamente. Ctrl+Z deshace y Ctrl+Y rehace.
 Ctrl+F busca, Ctrl+N crea, Ctrl+D duplica y Ctrl+Shift+C copia el prompt.
 Las columnas y categorías conservan el orden personalizado.
@@ -30,9 +32,8 @@ Cerrar sesión conserva tus datos locales; no cierra PhotoBatch ni otros equipos
 No copies archivos de sesión entre computadoras.
 
 ACTUALIZAR
-Actualizar > Buscar actualizaciones consulta el canal público de GitHub.
-Descarga y extrae el parche, solicita confirmación, guarda, reinicia y aplica.
-Instalar ZIP permite elegir un parche sin extraerlo manualmente.
+Las nuevas compilaciones se instalan directamente en la PC con PromptDesk cerrado.
+Actualizá también la notebook si usás las opciones de variables en ambos equipos.
 
 DATOS
 Catálogo: %LOCALAPPDATA%\PromptDesk\datos.xml

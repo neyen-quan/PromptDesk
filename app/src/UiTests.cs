@@ -76,6 +76,71 @@ namespace PromptDesk
             Check(window.ClientRectangle.Contains(bounds), name + " queda fuera de la ventana: " + bounds);
         }
 
+        static void VariableDialogs(MainWindow window, string outputFolder)
+        {
+            var entry = new Entry();
+            entry.Set("name", "Iluminación de estudio");
+            entry.Set("prompt", "Escena: {{luz}}.");
+            var variable = new Variable { Token = "{{luz}}", Label = "Iluminación", Value = "Luz anterior" };
+            variable.Options.Add(new VariableOption { Label = "Suave", Value = "Luz difusa\r\ncon sombras suaves" });
+            variable.Options.Add(new VariableOption { Label = "Directa", Value = "Luz frontal" });
+            entry.Variables.Add(variable);
+            using (var form = VariableEditor.Create(entry))
+            {
+                form.Show(window);
+                Pump(70);
+                var grid = (DataGridView)form.Controls.Find("VariableGrid", true).Single();
+                foreach (DataGridViewRow row in grid.Rows)
+                {
+                    var style = row.Cells[0].InheritedStyle;
+                    Check(row.Height >= style.Font.Height + style.Padding.Vertical + 2,
+                        "La altura inicial de la fila de variable debe incluir texto y márgenes");
+                }
+                using (var bitmap = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                    bitmap.Save(Path.Combine(outputFolder, "editor-de-variables.png"), ImageFormat.Png);
+                }
+                form.Close();
+            }
+
+            Exception dialogError = null;
+            window.BeginInvoke((Action)delegate {
+                var dialog = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Text.StartsWith("Asignar valores"));
+                try
+                {
+                    var choice = (ComboBox)dialog.Controls.Find("variableChoice0", true).Single();
+                    choice.SelectedIndex = 0;
+                    var value = (TextBox)dialog.Controls.Find("variableValue0", true).Single();
+                    Check(value.ReadOnly && value.Text == variable.Options[0].Value, "Elegir una opción muestra su texto completo");
+                    using (var bitmap = new Bitmap(dialog.Width, dialog.Height))
+                    {
+                        dialog.DrawToBitmap(bitmap, new Rectangle(Point.Empty, dialog.Size));
+                        bitmap.Save(Path.Combine(outputFolder, "copiar-con-opciones.png"), ImageFormat.Png);
+                    }
+                    ((GlassButton)dialog.Controls.Find("confirmVariableValues", true).Single()).PerformClick();
+                }
+                catch (Exception ex) { dialogError = ex; if (dialog != null && dialog != window) dialog.Close(); }
+            });
+            Call(window, "Copy", entry);
+            if (dialogError != null) throw dialogError;
+            Check(variable.Value == variable.Options[0].Value && Clipboard.GetText() == "Escena: " + variable.Value + ".",
+                "Copiar usa el texto de la opción, con sus saltos de línea");
+            Check(entry.Get("prompt") == "Escena: {{luz}}.", "Copiar conserva el marcador en la plantilla");
+            using (var form = window.CreateVariableValuesDialog(entry))
+            {
+                form.Show(window); Pump(50);
+                var choice = (ComboBox)form.Controls.Find("variableChoice0", true).Single();
+                var value = (TextBox)form.Controls.Find("variableValue0", true).Single();
+                Check(choice.SelectedIndex == 0, "Volver a copiar recuerda la opción elegida");
+                choice.SelectedIndex = choice.Items.Count - 1;
+                Check(!value.ReadOnly, "Texto libre permite escribir un valor personalizado");
+                value.Text = "Luz lateral";
+                ((GlassButton)form.Controls.Find("cancelVariableValues", true).Single()).PerformClick();
+                Check(variable.Value == variable.Options[0].Value, "Cancelar conserva el último valor confirmado");
+            }
+        }
+
         static void CloudHotkeyNotices(MainWindow window)
         {
             var notices = Field<System.Collections.Generic.List<string>>(window, "cloudNotices");
@@ -282,6 +347,8 @@ namespace PromptDesk
                         "Subir cambios locales sin recibir cambios remotos borra el historial de deshacer");
                     Check(!Field<bool>(window, "cloudPending"), "Una subida confirmada queda marcada como pendiente");
                     CloudHotkeyNotices(window);
+                    VariableDialogs(window, outputFolder);
+                    VariableEditorTests.Run(window);
                     window.Close();
                 }
 

@@ -121,7 +121,19 @@ namespace PromptDesk
                 if (variables != null)
                 {
                     Attributes(variables); Children(variables, "var");
-                    foreach (XElement variable in variables.Elements("var")) { Attributes(variable, "token", "label", "value"); Children(variable); }
+                    foreach (XElement variable in variables.Elements("var"))
+                    {
+                        Attributes(variable, "token", "label", "value");
+                        Children(variable, "option");
+                        foreach (XElement option in variable.Elements("option"))
+                        {
+                            Attributes(option, "label", "value");
+                            Children(option);
+                            if (String.IsNullOrWhiteSpace((string)option.Attribute("label")) ||
+                                String.IsNullOrWhiteSpace((string)option.Attribute("value")))
+                                throw Invalid("Una opción de variable necesita nombre y texto.");
+                        }
+                    }
                 }
                 result.Entries.Add(Entry.Read(item));
             }
@@ -189,8 +201,7 @@ namespace PromptDesk
                 new XAttribute("hotkey", entry.Hotkey), new XAttribute("lastUsed", includeUsage ? entry.LastUsed : ""),
                 entry.Cells.Where(c => c.Value.Length != 0).OrderBy(c => c.Key, StringComparer.Ordinal)
                     .Select(c => new XElement("cell", new XAttribute("key", c.Key), c.Value)),
-                new XElement("variables", entry.Variables.Select(v => new XElement("var",
-                    new XAttribute("token", v.Token), new XAttribute("label", v.Label), new XAttribute("value", v.Value)))));
+                new XElement("variables", entry.Variables.Select(v => v.Xml())));
         }
 
         internal static Entry Copy(Entry entry) { return entry == null ? null : Entry.Read(EntryXml(entry, true)); }

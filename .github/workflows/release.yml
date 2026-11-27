@@ -1,13 +1,6 @@
 name: Compilar y publicar PromptDesk
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'app/**'
-      - 'scripts/**'
-      - 'updates/**'
-      - '.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:

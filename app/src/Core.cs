@@ -15,9 +15,37 @@ namespace PromptDesk
         public bool Visible = true;
     }
 
+    public class VariableOption
+    {
+        public string Label = "", Value = "";
+    }
+
     public class Variable
     {
         public string Token = "", Label = "", Value = "";
+        public List<VariableOption> Options = new List<VariableOption>();
+
+        internal XElement Xml()
+        {
+            return new XElement("var", new XAttribute("token", Token), new XAttribute("label", Label),
+                new XAttribute("value", Value), Options.Select(option => new XElement("option",
+                    new XAttribute("label", option.Label), new XAttribute("value", option.Value))));
+        }
+
+        internal static Variable Read(XElement element)
+        {
+            return new Variable
+            {
+                Token = (string)element.Attribute("token") ?? "",
+                Label = (string)element.Attribute("label") ?? "",
+                Value = (string)element.Attribute("value") ?? "",
+                Options = element.Elements("option").Select(option => new VariableOption
+                {
+                    Label = (string)option.Attribute("label") ?? "",
+                    Value = (string)option.Attribute("value") ?? ""
+                }).ToList()
+            };
+        }
     }
 
     public class Entry
@@ -44,9 +72,7 @@ namespace PromptDesk
                 new XAttribute("id", Id), new XAttribute("favorite", Favorite),
                 new XAttribute("hotkey", Hotkey), new XAttribute("lastUsed", LastUsed),
                 Cells.Select(cell => new XElement("cell", new XAttribute("key", cell.Key), cell.Value)),
-                new XElement("variables", Variables.Select(variable => new XElement("var",
-                    new XAttribute("token", variable.Token), new XAttribute("label", variable.Label),
-                    new XAttribute("value", variable.Value)))));
+                new XElement("variables", Variables.Select(variable => variable.Xml())));
         }
 
         public static Entry Read(XElement element)
@@ -69,13 +95,7 @@ namespace PromptDesk
             }
             XElement variables = element.Element("variables");
             if (variables != null)
-                foreach (XElement variable in variables.Elements("var"))
-                    entry.Variables.Add(new Variable
-                    {
-                        Token = (string)variable.Attribute("token") ?? "",
-                        Label = (string)variable.Attribute("label") ?? "",
-                        Value = (string)variable.Attribute("value") ?? ""
-                    });
+                entry.Variables = variables.Elements("var").Select(Variable.Read).ToList();
             return entry;
         }
 

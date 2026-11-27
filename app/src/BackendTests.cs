@@ -35,6 +35,7 @@ namespace PromptDesk
         public static void Run(Action<bool, string> check, string folder)
         {
             CheckStorage(check, Path.Combine(folder, "storage"));
+            CheckVariableOptions(check, Path.Combine(folder, "variable-options"));
             CheckHistory(check, Path.Combine(folder, "history"));
             CheckSearch(check);
             CheckTemplates(check);
@@ -96,6 +97,34 @@ namespace PromptDesk
                 "Una exportación XML fallida dejó archivos temporales");
             check(Directory.GetFiles(Path.Combine(folder, "Historial"), "*.xml").Length == 1,
                 "Un guardado fallido agregó un respaldo vacío");
+        }
+
+        static void CheckVariableOptions(Action<bool, string> check, string folder)
+        {
+            Store database = EmptyStore(folder);
+            Entry entry = Prompt("Collar", "Personales", "", "", "Modo: {{collar}}");
+            Variable variable = Variable.Read(XElement.Parse("<var token='{{collar}}' label='Collar' value='A mano'/>"));
+            entry.Variables.Add(variable);
+            database.Entries.Add(entry);
+            check(variable.Options.Count == 0 && Templates.Render(entry) == "Modo: A mano",
+                "Una variable anterior debe conservar su valor libre");
+
+            const string longValue = " Acentos, <tela> & \"collar\".\r\nSegunda línea.\n\t ";
+            variable.Options.Add(new VariableOption { Label = "Por debajo", Value = longValue });
+            variable.Options.Add(new VariableOption { Label = "Sin collar", Value = "Sin cadena." });
+            database.Save();
+            database.Load(database.Pathname);
+            Entry loaded = database.Entries.Single();
+            Variable restored = loaded.Variables.Single();
+            check(restored.Options.Select(option => option.Label).SequenceEqual(new[] { "Por debajo", "Sin collar" }) &&
+                restored.Options[0].Value == longValue && restored.Value == "A mano",
+                "El catálogo altera las opciones de una variable o reemplaza su último valor");
+            Entry copy = loaded.Clone();
+            copy.Variables[0].Options[0].Value = "Otro texto";
+            check(restored.Options[0].Value == longValue, "El duplicado comparte sus opciones con el original");
+            restored.Value = restored.Options[0].Value;
+            check(Templates.Render(loaded) == "Modo: " + longValue && loaded.Get("prompt") == "Modo: {{collar}}",
+                "La opción elegida no conserva su texto al sustituir el marcador");
         }
 
         static void CheckHistory(Action<bool, string> check, string folder)

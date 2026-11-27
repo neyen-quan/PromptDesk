@@ -11,11 +11,11 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("PromptDesk")]
 [assembly: AssemblyProduct("PromptDesk")]
 [assembly: AssemblyDescription("Tu biblioteca de prompts")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.1.0")]
+[assembly: AssemblyFileVersion("1.3.1.0")]
 namespace PromptDesk {
 public static class Branding {
- public const string Version="1.3.0";
+ public const string Version="1.3.1";
  public const string AppId="Neyen.PromptDesk.Desktop";
  static readonly Guid StoreId=new Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99");
  [StructLayout(LayoutKind.Sequential)] struct Key{public Guid id;public uint pid;public Key(uint p){id=new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");pid=p;}}

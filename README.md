@@ -35,6 +35,7 @@ herramientas menos frecuentes están agrupadas en menús.
 - Acceder a todos los prompts, favoritos y recientes.
 - Usar **Lista** para recorrer contenido y **Tabla** para editar columnas personalizadas.
 - Guardado automático, deshacer/rehacer, variables al copiar y atajos globales.
+- En **Variables**, seleccioná el marcador y abrí **Editar opciones…**. Guardá un nombre y el texto de reemplazo de cada alternativa. Al copiar, elegí por nombre o seleccioná **Texto libre**.
 - Mantener categorías, modelos, orden y campos existentes sin cambiar el formato del catálogo.
 
 El diseño toma como referencias de organización a
@@ -52,20 +53,10 @@ También admite uso portable desde la carpeta extraída.
 
 ## Actualizar
 
-Desde el programa: **Actualizar → Buscar actualizaciones**.
-Canal estable:
-
-```
-https://github.com/neyen-quan/PromptDesk/releases/latest/download/latest.json
-```
-
-Los paquetes de parche incluyen solo runtime modificado. El programa descarga,
-verifica el ZIP y los hashes, solicita confirmación, guarda y reinicia.
-Se conservan los archivos anteriores para recuperar errores de aplicación.
-Los hashes comprueban integridad; los binarios aún no tienen firma de código.
-
-Para conectar una instalación 1.1.1, pegar el canal en **Configurar canal**.
-La versión 1.1.2 y posteriores lo usan por defecto.
+Las actualizaciones se aplican directamente en la PC. Cerrá PromptDesk para
+instalar la compilación probada en su carpeta de ejecución. La biblioteca y
+los respaldos se guardan por separado. Si usás opciones de variables en dos
+equipos, actualizá ambos a 1.3.1 o una versión posterior.
 
 ## Datos personales
 
@@ -95,7 +86,8 @@ Las pruebas Windows también aplican el parche con el actualizador incluido en l
 versión publicada anterior y comparan el resultado con el paquete completo.
 
 Cada publicación exige incrementar `Branding.Version` y sus atributos de versión.
-Al subir a `main`, GitHub Actions compila en Windows, ejecuta pruebas y publica
+Los cambios se guardan en GitHub como respaldo del código. Para una publicación
+explícita, el workflow manual compila en Windows, ejecuta pruebas y publica
 una release con instalador completo, parche y `latest.json`. Si la versión ya
 está publicada no se reemplaza: se debe incrementar para publicar cambios.
 Los parches son acumulativos desde 1.1.3: cada base publicada compatible se

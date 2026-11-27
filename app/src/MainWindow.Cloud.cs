@@ -18,7 +18,7 @@ namespace PromptDesk
         GlassButton accountButton;
         Label cloudStatus;
         bool cloudPending, cloudSyncBusy, cloudAccountBusy, cloudAccountOpen;
-        bool cloudApplying, cloudClosing, cloudAllowClose, cloudUpdatesOpen;
+        bool cloudApplying, cloudClosing, cloudAllowClose;
         bool cloudNeedsLogin, cloudOffline;
         int cloudGeneration;
         DateTime cloudDue = DateTime.MaxValue, cloudLastSync = DateTime.MinValue;
@@ -43,7 +43,7 @@ namespace PromptDesk
             cloudTimer = new System.Windows.Forms.Timer(uiComponents) { Interval = 1000 };
             cloudTimer.Tick += async (s, e) =>
             {
-                if (!CloudSignedIn || cloudSyncBusy || cloudAccountBusy || cloudClosing || cloudUpdatesOpen || !Enabled || dirty || grid.IsCurrentCellInEditMode || DateTime.UtcNow < cloudDue) return;
+                if (!CloudSignedIn || cloudSyncBusy || cloudAccountBusy || cloudClosing || !Enabled || dirty || grid.IsCurrentCellInEditMode || DateTime.UtcNow < cloudDue) return;
                 await SynchronizeCloudAsync();
             };
             Shown += (s, e) => cloudTimer.Start();
@@ -377,26 +377,5 @@ namespace PromptDesk
             if (cloudTimer != null) cloudTimer.Stop();
         }
 
-        async void ShowUpdatesWithCloud()
-        {
-            if (cloudUpdatesOpen || cloudClosing) return;
-            cloudUpdatesOpen = true;
-            try
-            {
-                if (cloudTask != null && !cloudTask.IsCompleted) await cloudTask;
-                if (CloudSignedIn && cloudPending) await SynchronizeCloudAsync();
-                if (IsDisposed) return;
-                UpdateCenter.Show(this, () =>
-                {
-                    if (!Save()) return false;
-                    // The updater restarts this same local library and its pending sync state.
-                    cloudAllowClose = true;
-                    Close();
-                    return IsDisposed;
-                });
-            }
-            catch (Exception error) { if (!IsDisposed) MessageBox.Show(this, error.Message, "Actualizar PromptDesk", MessageBoxButtons.OK, MessageBoxIcon.Error); }
-            finally { cloudUpdatesOpen = false; }
-        }
     }
 }
