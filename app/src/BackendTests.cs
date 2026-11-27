@@ -35,10 +35,78 @@ namespace PromptDesk
         public static void Run(Action<bool, string> check, string folder)
         {
             CheckStorage(check, Path.Combine(folder, "storage"));
+            CheckFolders(check, Path.Combine(folder, "subfolders"));
+            CheckFolderManagement(check, Path.Combine(folder, "category-manager"));
             CheckVariableOptions(check, Path.Combine(folder, "variable-options"));
             CheckHistory(check, Path.Combine(folder, "history"));
             CheckSearch(check);
             CheckTemplates(check);
+        }
+
+        static void CheckFolders(Action<bool, string> check, string folder)
+        {
+            var db = EmptyStore(folder);
+            db.Categories.Add("404::Reels");
+            db.Categories.Add("404::Reels › Accesorios"); // An existing flat category with punctuation.
+            db.Entries.Add(Prompt("Ropa", "Personales", "Reels", "Modelo", "Texto de prueba"));
+            check(db.Document().Root.Element("subfolders") == null, "Una biblioteca anterior conserva el formato de categorías planas");
+            var history = new UndoHistory(db);
+            string child = CategoryFolders.Create(db, "Personales", "Reels", " Accesorios ");
+            history.Record(db, "");
+            check(CategoryFolders.Parent(db, "Personales", child) == "Reels" && CategoryFolders.Parent(db, "404", child) == null,
+                "La jerarquía es por colección y conserva las categorías planas anteriores con separadores");
+            check(Fails(() => CategoryFolders.Create(db, "Personales", "Reels", "Accesorios")) &&
+                Fails(() => CategoryFolders.Create(db, "404", "Reels", "Accesorios")),
+                "La creación rechaza colisiones con subcarpetas y categorías existentes");
+            check(history.Undo(db) && db.Subfolders.Count == 0 && history.Redo(db) && db.Subfolders.Count == 1,
+                "Deshacer y rehacer conservan la estructura de las carpetas");
+            string deep = CategoryFolders.Create(db, "Personales", child, "Collares");
+            db.Entries[0].Set("category", deep);
+            db.Save();
+            var reread = EmptyStore(Path.Combine(folder, "otra"));
+            reread.Load(db.Pathname);
+            check(CategoryFolders.IsAtOrBelow(reread, "Personales", deep, "Reels") &&
+                reread.Categories.Contains("Personales::Reels") && reread.Entries[0].Get("category") == deep,
+                "Reabrir conserva los ancestros, incluso si el último prompt del padre se movió a un nieto");
+        }
+
+        static void CheckFolderManagement(Action<bool, string> check, string folder)
+        {
+            const string scope = "Personales";
+            var db = EmptyStore(folder);
+            db.Categories.Add("Campaña"); // Old bare names are available in both collections.
+            db.Categories.Add("Personales::Campaña › Independiente");
+            string product = CategoryFolders.Create(db, scope, "Campaña", "Producto");
+            string blue = CategoryFolders.Create(db, scope, product, "Azul");
+            string other = CategoryFolders.Create(db, scope, "Campaña", "Otro");
+            string remote = CategoryFolders.Create(db, "404", "Campaña", "Producto");
+            db.CategoryOrder.AddRange(new[] { scope+"::"+blue, scope+"::"+product, scope+"::"+other });
+            db.DisabledChoices.Add("category::"+scope+"::"+product);
+            var archived = Prompt("Catálogo", scope, blue, "", "Ejemplo"); archived.Archived = true;
+            var another = Prompt("Colección 404", "404", remote, "", "Ejemplo");
+            db.Entries.Add(archived); db.Entries.Add(another);
+            check(CategoryCatalog.Values(db, scope).Take(4).SequenceEqual(new[] { "Campaña", product, blue, other }),
+                "El orden manual de cada carpeta conserva juntas sus subcarpetas incluso al ordenar nietos");
+            string before = db.Document().ToString();
+            check(Fails(() => CategoryCatalog.Rename(db, scope, product, "Otro")) && db.Document().ToString() == before,
+                "Renombrar a una carpeta ocupada conserva intacta toda la rama");
+            CategoryCatalog.Rename(db, scope, "Campaña", "Anuncios");
+            check(archived.Get("category") == "Anuncios › Producto › Azul" && archived.Archived &&
+                another.Get("category") == remote && CategoryCatalog.Values(db, "404").Contains("Campaña") &&
+                db.DisabledChoices.Contains("category::Personales::Anuncios › Producto") &&
+                db.CategoryOrder.Contains("Personales::Anuncios › Producto › Azul") &&
+                CategoryCatalog.Values(db, scope).Contains("Campaña › Independiente"),
+                "Renombrar respeta la otra colección, las categorías planas anteriores y los datos de la rama");
+            CategoryCatalog.Rename(db, scope, "Anuncios › Producto", "Material");
+            check(CategoryFolders.Parent(db, scope, archived.Get("category")) == "Anuncios › Material",
+                "Renombrar una subcarpeta conserva su padre y la jerarquía de las carpetas hijas");
+            CategoryCatalog.Remove(db, scope, "Anuncios › Material");
+            check(archived.Get("category") == "" && archived.Archived && db.Entries.Contains(archived) &&
+                another.Get("category") == remote && CategoryCatalog.Values(db, scope).Contains("Anuncios › Otro") &&
+                !db.CategoryOrder.Any(v => v.StartsWith("Personales::Anuncios › Material")) &&
+                !db.DisabledChoices.Contains("category::Personales::Anuncios › Material") &&
+                !CategoryCatalog.Values(db, scope).Contains("Anuncios › Material › Azul"),
+                "Eliminar una rama conserva los prompts, sus hermanos y las categorías de otras colecciones");
         }
 
         static void CheckStorage(Action<bool, string> check, string folder)

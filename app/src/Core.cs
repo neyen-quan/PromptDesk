@@ -128,6 +128,7 @@ namespace PromptDesk
         public List<Field> Fields = new List<Field>();
         public List<Entry> Entries = new List<Entry>();
         public List<string> Categories = new List<string>();
+        public List<string> Subfolders = new List<string>();
         public List<string> Models = new List<string>();
         public List<string> ColumnOrder = new List<string>();
         public List<string> CategoryOrder = new List<string>();
@@ -185,6 +186,8 @@ namespace PromptDesk
 
             // Parse the entire candidate before replacing any in-memory collection.
             var categories = ReadList(root, "categories", "category");
+            var subfolders = ReadList(root, "subfolders", "folder");
+            CategoryFolders.Validate(subfolders);
             var models = ReadList(root, "models", "model");
             var columnOrder = ReadList(root, "columnOrder", "column");
             var categoryOrder = ReadList(root, "categoryOrder", "category");
@@ -192,6 +195,7 @@ namespace PromptDesk
             Fields = fields;
             Entries = entries;
             Categories = categories;
+            Subfolders = subfolders;
             Models = models;
             ColumnOrder = columnOrder;
             CategoryOrder = categoryOrder;
@@ -210,6 +214,7 @@ namespace PromptDesk
                     new XAttribute("id", field.Id), new XAttribute("title", field.Title),
                     new XAttribute("visible", field.Visible)))),
                 new XElement("categories", Categories.Select(value => new XElement("category", value))),
+                Subfolders.Count == 0 ? null : new XElement("subfolders", Subfolders.Select(value => new XElement("folder", value))),
                 new XElement("models", Models.Select(value => new XElement("model", value))),
                 new XElement("columnOrder", ColumnOrder.Select(value => new XElement("column", value))),
                 new XElement("categoryOrder", CategoryOrder.Select(value => new XElement("category", value))),

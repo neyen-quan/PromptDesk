@@ -88,6 +88,23 @@ namespace PromptDesk
             check(separate.Conflicts.Count == 0 && CloudCatalog.Read(separate.Xml).Entries.Count == 2, "Cambios independientes no crean copias");
             string renamed = Change(baseline, c => c.Entries[0].Set("name", "Nuevo título"));
             string edited = Change(baseline, c => c.Entries[0].Set("prompt", "Texto remoto"));
+            const string accessories = "Personales::Reels › Accesorios";
+            const string necklaces = "Personales::Reels › Accesorios › Collares";
+            string withFolder = Change(baseline, c => {
+                c.Categories.AddRange(new[] { "Personales::Reels", accessories });
+                c.Subfolders.Add(accessories);
+            });
+            string withGrandchild = Change(withFolder, c => { c.Categories.Add(necklaces); c.Subfolders.Add(necklaces); });
+            var joinedFolders = CloudCatalog.Read(CloudMerge.Merge(null, withGrandchild, edited).Xml);
+            check(joinedFolders.Subfolders.Contains(necklaces) && joinedFolders.Subfolders.Contains(accessories),
+                "La primera sincronización conserva las carpetas vacías de varios niveles");
+            var concurrentFolders = CloudCatalog.Read(CloudMerge.Merge(withFolder, baseline, withGrandchild).Xml);
+            check(concurrentFolders.Subfolders.Contains(necklaces) && concurrentFolders.Subfolders.Contains(accessories) &&
+                concurrentFolders.Categories.Contains("Personales::Reels"), "Crear un nieto mientras se elimina el padre conserva su ruta");
+            check(CloudCatalog.Equivalent(CloudMerge.Merge(withFolder, baseline, withFolder).Xml, baseline),
+                "La eliminación de una subcarpeta vacía se propaga");
+            check(Rejects(() => CloudCatalog.Validate(withFolder.Replace("<folder>" + accessories, "<folder>Reels"))),
+                "La sincronización detecta subcarpetas sin ruta de colección");
             string archived = Change(baseline, c => c.Entries[0].Archived = true);
             var archiveAndEdit = CloudMerge.Merge(baseline, archived, edited);
             Entry archivedEntry = Record(archiveAndEdit.Xml, "a");

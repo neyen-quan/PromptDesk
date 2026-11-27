@@ -308,7 +308,7 @@ namespace PromptDesk
                     candidate.ReadDocument(CloudCatalog.ParseDocument(rebased.Xml));
                     candidate.Save();
                     db.Fields = candidate.Fields; db.Entries = candidate.Entries;
-                    db.Categories = candidate.Categories; db.Models = candidate.Models;
+                    db.Categories = candidate.Categories; db.Subfolders = candidate.Subfolders; db.Models = candidate.Models;
                     db.ColumnOrder = candidate.ColumnOrder; db.CategoryOrder = candidate.CategoryOrder;
                     db.DisabledChoices = candidate.DisabledChoices;
                 }

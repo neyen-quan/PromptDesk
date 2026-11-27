@@ -38,6 +38,7 @@ namespace PromptDesk
             internal List<Field> Fields = new List<Field>();
             internal List<Entry> Entries = new List<Entry>();
             internal List<string> Categories = new List<string>(), Models = new List<string>();
+            internal List<string> Subfolders = new List<string>();
             internal List<string> ColumnOrder = new List<string>(), CategoryOrder = new List<string>();
             internal List<string> DisabledChoices = new List<string>();
 
@@ -47,6 +48,7 @@ namespace PromptDesk
                     new XElement("columns", Fields.Select(f => new XElement("col",
                         new XAttribute("id", f.Id), new XAttribute("title", f.Title), new XAttribute("visible", f.Visible)))),
                     List("categories", "category", Categories, false),
+                    Subfolders.Count == 0 ? null : List("subfolders", "folder", Subfolders, false),
                     List("models", "model", Models, false),
                     List("columnOrder", "column", ColumnOrder, true),
                     List("categoryOrder", "category", CategoryOrder, true),
@@ -87,8 +89,8 @@ namespace PromptDesk
             if (document.DocumentType != null || root == null || root.Name != "promptdesk" || (string)root.Attribute("version") != "1")
                 throw Invalid("El catálogo no es compatible con PromptDesk.");
             Attributes(root, "version");
-            Children(root, "columns", "categories", "models", "columnOrder", "categoryOrder", "disabledChoices", "records");
-            foreach (string name in new[] { "columns", "categories", "models", "columnOrder", "categoryOrder", "disabledChoices", "records" })
+            Children(root, "columns", "categories", "subfolders", "models", "columnOrder", "categoryOrder", "disabledChoices", "records");
+            foreach (string name in new[] { "columns", "categories", "subfolders", "models", "columnOrder", "categoryOrder", "disabledChoices", "records" })
                 if (root.Elements(name).Skip(1).Any()) throw Invalid("El catálogo contiene secciones repetidas.");
             if (root.Element("columns") == null || root.Element("records") == null)
                 throw Invalid("El catálogo está incompleto.");
@@ -140,6 +142,8 @@ namespace PromptDesk
                 result.Entries.Add(Entry.Read(item));
             }
             result.Categories = ReadList(root, "categories", "category");
+            result.Subfolders = ReadList(root, "subfolders", "folder");
+            CategoryFolders.Validate(result.Subfolders);
             result.Models = ReadList(root, "models", "model");
             result.ColumnOrder = ReadList(root, "columnOrder", "column");
             result.CategoryOrder = ReadList(root, "categoryOrder", "category");
@@ -298,6 +302,8 @@ namespace PromptDesk
             merged.Entries = winners.Values.OrderBy(e => e.Id, StringComparer.Ordinal).ToList();
             MergeFields(baseline, local, remote, merged, result);
             merged.Categories = MergeSet(List(baseline, c => c.Categories), local.Categories, remote.Categories, baseline == null);
+            merged.Subfolders = MergeSet(List(baseline, c => c.Subfolders), local.Subfolders, remote.Subfolders, baseline == null);
+            PreserveFolderParents(merged, local.Subfolders.Concat(remote.Subfolders));
             merged.Models = MergeSet(List(baseline, c => c.Models), local.Models, remote.Models, baseline == null);
             merged.DisabledChoices = MergeSet(List(baseline, c => c.DisabledChoices), local.DisabledChoices, remote.DisabledChoices, baseline == null);
             var columnMembers = MergeSet(List(baseline, c => c.ColumnOrder), local.ColumnOrder, remote.ColumnOrder, baseline == null);
@@ -322,6 +328,30 @@ namespace PromptDesk
             result.Xml = merged.Text();
             CloudCatalog.Validate(result.Xml);
             return result;
+        }
+
+        // One device can delete a folder while another adds a prompt or child inside it.
+        // Recover only the ancestry needed by the surviving entries and folders.
+        static void PreserveFolderParents(CloudCatalog.Catalog merged, IEnumerable<string> declared)
+        {
+            var known = new HashSet<string>(declared, StringComparer.Ordinal);
+            if (known.Count == 0) return;
+            var kept = new HashSet<string>(StringComparer.Ordinal);
+            var categories = new HashSet<string>(merged.Categories, StringComparer.Ordinal);
+            var paths = merged.Subfolders.Concat(merged.Entries.Select(e => e.Get("collection") + "::" + e.Get("category")));
+            foreach (string path in paths)
+            {
+                string current = path;
+                while (known.Contains(current) && kept.Add(current))
+                {
+                    categories.Add(current);
+                    current = current.Substring(0, current.LastIndexOf(CategoryFolders.Separator, StringComparison.Ordinal));
+                    string parentName = current.Substring(current.IndexOf("::", StringComparison.Ordinal) + 2);
+                    if (!categories.Contains(parentName)) categories.Add(current);
+                }
+            }
+            merged.Subfolders = kept.ToList();
+            merged.Categories = categories.ToList();
         }
 
         static Entry MergeEntry(Entry b, Entry l, Entry r, out bool conflict)

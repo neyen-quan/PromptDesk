@@ -145,9 +145,10 @@ namespace PromptDesk
             bottom.Controls.Add(manage);
             var categoryHeader = new Panel { Dock = DockStyle.Top, Height = 38 };
             categoryHeader.Controls.Add(LabelAt("CATEGORÍAS", 2, 7, 128, 23, 8, UI.Muted));
-            var add = UI.Button("", AddCategory); add.IconName = "plus"; add.Quiet = true;
-            add.AutoSize = false; add.SetBounds(140, 1, 32, 32); add.AccessibleName = "Crear categoría";
-            tips.SetToolTip(add, "Crear categoría"); categoryHeader.Controls.Add(add);
+            var add = new GlassButton { IconName = "plus", Quiet = true, AutoSize = false, AccessibleName = "Crear categoría o subcarpeta" };
+            add.SetBounds(140, 1, 32, 32);
+            add.Click += (s, e) => categoryMenu.Show(add, new Point(0, add.Height));
+            tips.SetToolTip(add, "Crear categoría o subcarpeta"); categoryHeader.Controls.Add(add);
             categories = new ListBox
             {
                 Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false,
@@ -236,7 +237,7 @@ namespace PromptDesk
             emptyHint = new Label { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9.5f), ForeColor = UI.Muted, TextAlign = ContentAlignment.TopCenter };
             emptyAction = UI.Button("Crear mi primer prompt", () => {
                 if (view.Text == "Archivados") OpenArchive(false);
-                else if (db.Entries.All(entry => entry.Archived)) AddEntry();
+                else if (ShowingFolderContents() || db.Entries.All(entry => entry.Archived)) AddEntry();
                 else ResetFilters();
             });
             emptyAction.Active = true; emptyAction.Dock = DockStyle.Fill;
@@ -335,7 +336,8 @@ namespace PromptDesk
             MenuAction(libraryMenu, "Deshacer                 Ctrl+Z", () => UndoChange(false)); MenuAction(libraryMenu, "Rehacer                    Ctrl+Y", () => UndoChange(true));
             libraryMenu.Items.Add(new ToolStripSeparator()); MenuAction(libraryMenu, "Ayuda y atajos", () => System.Diagnostics.Process.Start(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LEEME.txt")));
             organizeMenu = NewMenu();
-            MenuAction(organizeMenu, "Nueva categoría…", AddCategory); MenuAction(organizeMenu, "Gestionar categorías…", () => ManageChoices("category"));
+            AddFolderMenuItems(organizeMenu); MenuAction(organizeMenu, "Gestionar categorías…", () => ManageChoices("category"));
+            categoryMenu = NewMenu(); categoryMenu.Name = "categoryMenu"; AddFolderMenuItems(categoryMenu);
             organizeMenu.Items.Add(new ToolStripSeparator()); MenuAction(organizeMenu, "Nuevo modelo…", AddModel); MenuAction(organizeMenu, "Gestionar modelos…", () => ManageChoices("model"));
             organizeMenu.Items.Add(new ToolStripSeparator()); MenuAction(organizeMenu, "Campos y columnas…", ManageFields); MenuAction(organizeMenu, "Crear campo personalizado…", AddColumn);
             promptMenu = NewMenu();
@@ -464,6 +466,13 @@ namespace PromptDesk
                 emptyHint.Text = "Para guardar un prompt acá, abrí su menú Más y elegí Archivar prompt.";
                 emptyAction.Visible = false;
             }
+            else if (ShowingFolderContents())
+            {
+                emptyTitle.Text = "Esta carpeta está vacía";
+                emptyHint.Text = "Creá un prompt acá o elegí esta carpeta en la ficha de un prompt existente.";
+                emptyAction.Text = "Nuevo prompt aquí";
+                emptyAction.Visible = true;
+            }
             else if (total == 0)
             {
                 emptyTitle.Text = archivedCount > 0 ? "Sin prompts activos" : "Tu biblioteca empieza acá";
@@ -490,18 +499,23 @@ namespace PromptDesk
                 value = CreateChoice(this, key, item.Get("collection"));
                 if (value == null) { ShowSelected(); return; }
             }
-            item.Set(key, value);
+            SetEntryChoice(item, key, value);
             if (key != "collection") RegisterChoice(key, item.Get("collection"), value);
             Changed(); RevealEntry(item);
         }
 
         void RevealEntry(Entry item)
         {
+            string path = item.Get("category");
+            bool showFolder = categories.SelectedIndex > 0 || CategoryFolders.Parent(db, item.Get("collection"), path) != null;
             busy = true;
             search.Clear(); view.SelectedItem = item.Archived ? "Archivados" : "Todos"; collection.SelectedItem = item.Get("collection");
             categories.SelectedIndex = categories.Items.Count > 0 ? 0 : -1;
             model.SelectedIndex = model.Items.Count > 0 ? 0 : -1;
-            selected = item; busy = false; RefreshAll();
+            selected = item; busy = false;
+            if (showFolder) ExpandCategoryAncestors(item.Get("collection"), path);
+            RefreshAll();
+            if (showFolder && path.Length > 0 && categories.Items.Contains(path)) categories.SelectedItem = path;
         }
 
         void ResetFilters()

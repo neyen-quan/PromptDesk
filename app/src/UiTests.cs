@@ -228,6 +228,80 @@ namespace PromptDesk
             notices.Clear();
         }
 
+        static void FolderNavigation(string folder, string outputFolder)
+        {
+            var store = new Store(folder);
+            store.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed.xml"));
+            store.Categories.Add("Personales::Reels");
+            store.Categories.Add("404::Proyectos");
+            var landscape = CategoryFolders.Create(store, "404", "Proyectos", "Exteriores");
+            var night = CategoryFolders.Create(store, "404", landscape, "Noche");
+            var parentEntry = new Entry();
+            parentEntry.Set("name", "Plano general"); parentEntry.Set("collection", "Personales");
+            parentEntry.Set("category", "Reels"); parentEntry.Set("prompt", "Plano de estudio.");
+            var otherEntry = new Entry();
+            otherEntry.Set("name", "Estudio nocturno"); otherEntry.Set("collection", "404");
+            otherEntry.Set("category", night); otherEntry.Set("prompt", "Escena exterior.");
+            store.Entries.Add(parentEntry); store.Entries.Add(otherEntry);
+            store.Save();
+            using (var window = new MainWindow(store, true))
+            {
+                window.Show(); window.Size = new Size(1100, 700); Pump(80);
+                var collection = Field<ComboBox>(window, "collection");
+                var categories = Field<ListBox>(window, "categories");
+                var library = Field<ListBox>(window, "library");
+                collection.SelectedItem = "Personales";
+                categories.SelectedItem = "Reels";
+                Check(library.Items.Count == 1 && library.SelectedItem == parentEntry, "La carpeta madre muestra su prompt");
+
+                Exception error = null;
+                window.BeginInvoke((Action)delegate {
+                    var dialog = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f != window && f.Text.Contains("subcarpeta"));
+                    try
+                    {
+                        if (dialog == null) throw new Exception("No se abrió Nueva subcarpeta");
+                        var input = (TextBox)dialog.Controls.Find("folderName", true).Single();
+                        input.Text = "Accesorios";
+                        dialog.AcceptButton.PerformClick();
+                    }
+                    catch (Exception ex) { error = ex; if (dialog != null) dialog.Close(); }
+                });
+                Call(window, "AddSubfolder");
+                if (error != null) throw error;
+                string child = "Reels" + CategoryFolders.Separator + "Accesorios";
+                Check(categories.Text == child && library.Items.Count == 0, "Crear una subcarpeta vacía la abre sin mover los prompts de su madre");
+                Call(window, "SetCategoryExpanded", "Reels", false);
+                Check(!categories.Items.Contains(child), "Al plegar una carpeta se ocultan sus subcarpetas");
+                Call(window, "SetCategoryExpanded", "Reels", true);
+                categories.SelectedItem = child;
+                Call(window, "AddEntry"); Pump(60);
+                var created = Field<Entry>(window, "selected");
+                Check(created.Get("category") == child && created.Get("collection") == "Personales",
+                    "Nuevo prompt hereda la subcarpeta y la colección seleccionadas");
+                categories.SelectedItem = "Reels";
+                library.SelectedItem = parentEntry; Pump(50);
+                Choose(Field<ComboBox>(window, "entryCategory"), child);
+                categories.SelectedItem = child;
+                Check(parentEntry.Get("category") == child && library.Items.Count == 2, "La ficha mueve un prompt a la subcarpeta");
+                Capture(window, outputFolder, "subcarpetas");
+                Field<GlassButton>(window, "tableModeButton").PerformClick(); Pump(50);
+                Check(Field<DataGridView>(window, "grid").Rows.Count == 2, "La tabla muestra los prompts de la subcarpeta");
+                Field<GlassButton>(window, "listModeButton").PerformClick(); Pump(50);
+                collection.SelectedItem = "404"; categories.SelectedItem = night;
+                library.SelectedItem = otherEntry; Call(window, "Duplicate"); Pump(50);
+                var copy = Field<Entry>(window, "selected");
+                Check(copy.Id != otherEntry.Id && copy.Get("collection") == "Personales" && copy.Get("category") == night &&
+                    CategoryFolders.Parent(store, "Personales", night) == landscape &&
+                    CategoryFolders.Parent(store, "Personales", landscape) == "Proyectos", "Duplicar entre colecciones conserva los niveles de carpeta");
+                window.Close();
+            }
+            var reopened = new Store(folder);
+            reopened.Load(reopened.Pathname);
+            Check(CategoryFolders.Parent(reopened, "Personales", parentEntry.Get("category")) == "Reels" &&
+                reopened.Entries.Single(e => e.Id == parentEntry.Id).Get("category") == parentEntry.Get("category"),
+                "La subcarpeta y sus asignaciones persisten al reabrir");
+        }
+
         static void ArchiveNavigation(string folder, string outputFolder)
         {
             var store = new Store(folder);
@@ -522,6 +596,7 @@ namespace PromptDesk
                 }
 
                 ArchiveNavigation(Path.Combine(temp, "archivados"), outputFolder);
+                FolderNavigation(Path.Combine(temp, "carpetas"), outputFolder);
                 var empty = new Store(Path.Combine(temp, "empty"));
                 empty.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed.xml"));
                 using (var window = new MainWindow(empty, true))

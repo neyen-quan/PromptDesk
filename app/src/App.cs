@@ -70,14 +70,14 @@ public partial class MainWindow:DarkForm {
   grid.SelectionChanged+=(s,e)=>{if(!busy)SelectEntry();};grid.CellContentClick+=(s,e)=>{if(e.RowIndex<0)return;var item=(Entry)grid.Rows[e.RowIndex].Tag;string key=grid.Columns[e.ColumnIndex].Name;if(key=="copy")Copy(item);if(key=="favorite"){item.Favorite=!item.Favorite;Changed();RefreshRows();}};
   grid.CellDoubleClick+=(s,e)=>{if(e.RowIndex<0)return;string key=grid.Columns[e.ColumnIndex].Name;if(key=="prompt"){editor.Focus();return;}if(key=="hotkey"){Shortcut((Entry)grid.Rows[e.RowIndex].Tag);return;}if(db.Fields.Any(f=>f.Id==key)){grid.BeginEdit(true);var combo=grid.EditingControl as ComboBox;if(combo!=null)combo.DroppedDown=true;}};
   grid.CellValidating+=(s,e)=>{if(e.RowIndex>=0&&grid.Columns[e.ColumnIndex].Name=="collection"){string value=Convert.ToString(e.FormattedValue);if(value!="404"&&value!="Personales"){e.Cancel=true;MessageBox.Show("Colección: escribí 404 o Personales.");}}};
-  grid.CellEndEdit+=(s,e)=>{if(busy||e.RowIndex<0)return;var item=(Entry)grid.Rows[e.RowIndex].Tag;string key=grid.Columns[e.ColumnIndex].Name;item.Set(key,Convert.ToString(grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value));Changed();BeginInvoke((Action)(()=>{RefreshAll();}));};
+  grid.CellEndEdit+=(s,e)=>{if(busy||e.RowIndex<0)return;var item=(Entry)grid.Rows[e.RowIndex].Tag;string key=grid.Columns[e.ColumnIndex].Name;string value=Convert.ToString(grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value);SetEntryChoice(item,key,value);Changed();BeginInvoke((Action)(()=>{RefreshAll();}));};
   grid.ColumnHeaderMouseClick+=(s,e)=>{string key=grid.Columns[e.ColumnIndex].Name;sortDesc=sortKey==key&&!sortDesc;sortKey=key;RefreshRows();};
   grid.ColumnDisplayIndexChanged+=(s,e)=>{if(busy||orderPending)return;orderPending=true;int generation=gridGeneration;BeginInvoke((Action)(()=>{if(generation!=gridGeneration)return;orderPending=false;if(!busy){CaptureColumnOrder();Changed();}}));};
   grid.EditingControlShowing+=(s,e)=>{UI.Style(e.Control);Branding.DarkControls(e.Control.Handle);var combo=e.Control as ComboBox;if(combo!=null){combo.SelectionChangeCommitted-=GridChoiceCommitted;combo.SelectionChangeCommitted+=GridChoiceCommitted;}};
   grid.DataError+=(s,e)=>{e.ThrowException=false;e.Cancel=true;status.Text="Elegí una opción del desplegable.";};
   editor.KeyDown+=UndoKeyDown;grid.KeyDown+=UndoKeyDown;
   grid.EditingControlShowing+=(sender,args)=>{args.Control.KeyDown-=UndoKeyDown;args.Control.KeyDown+=UndoKeyDown;};
-  categories.DrawMode=DrawMode.OwnerDrawFixed;categories.ItemHeight=42;categories.DrawItem+=(sender,args)=>{if(args.Index<0)return;bool active=(args.State&DrawItemState.Selected)!=0;using(var brush=new SolidBrush(UI.Input))args.Graphics.FillRectangle(brush,args.Bounds);if(active){var r=new Rectangle(args.Bounds.X+2,args.Bounds.Y+3,args.Bounds.Width-4,args.Bounds.Height-6);using(var path=Glass.Round(r,7))using(var brush=new SolidBrush(UI.Selected))args.Graphics.FillPath(brush,path);using(var brush=new SolidBrush(UI.Accent))args.Graphics.FillRectangle(brush,args.Bounds.X+2,args.Bounds.Y+12,3,args.Bounds.Height-24);}TextRenderer.DrawText(args.Graphics,categories.Items[args.Index].ToString(),categories.Font,new Rectangle(args.Bounds.X+14,args.Bounds.Y,args.Bounds.Width-20,args.Bounds.Height),active?UI.Accent:UI.Ink,TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);};
+  WireCategoryNavigation();
   editor.TextChanged+=(s,e)=>{if(!busy&&selected!=null){selected.Set("prompt",editor.Text);Changed("prompt:"+selected.Id);UpdateEditorSummary();library.Invalidate();}};
  }
  protected override void OnPaintBackground(PaintEventArgs e){Glass.Backdrop(e.Graphics,ClientRectangle);}
@@ -97,29 +97,59 @@ public partial class MainWindow:DarkForm {
  void UndoKeyDown(object sender,KeyEventArgs args){if(args.Control&&(args.KeyCode==Keys.Z||args.KeyCode==Keys.Y)){args.SuppressKeyPress=true;args.Handled=true;UndoChange(args.KeyCode==Keys.Y);}}
  void UndoChange(bool redo){grid.EndEdit();if(orderPending){CaptureColumnOrder();Changed();orderPending=false;}saveTimer.Stop();if(!(redo?history.Redo(db):history.Undo(db))){status.Text="No hay cambios para "+(redo?"rehacer":"deshacer")+".";return;}dirty=true;RefreshAll();RegisterKeys();Save();status.Text=(redo?"Cambio rehecho":"Cambio deshecho")+" · Ctrl+Z / Ctrl+Y";}
  string ChoiceId(string key,string scope,string value){return key=="model"?"model::"+value:"category::"+scope+"::"+value;}
- bool ChoiceEnabled(string key,string scope,string value){return !db.DisabledChoices.Contains(ChoiceId(key,scope,value));}
+ bool ChoiceEnabled(string key,string scope,string value){
+  while(value!=null){
+   if(db.DisabledChoices.Contains(ChoiceId(key,scope,value)))return false;
+   value=key=="category"?CategoryFolders.Parent(db,scope,value):null;
+  }
+  return true;
+ }
  List<string> CatalogValues(string key,string scope=null){
  if(key=="model")return db.Models.Concat(db.Entries.Select(item=>item.Get("model"))).Where(v=>v.Length>0).Distinct().OrderBy(v=>v).ToList();
  if(scope==null||scope=="Todos")return CatalogValues(key,"Personales").Concat(CatalogValues(key,"404")).Distinct().ToList();
- var values=db.Categories.Where(c=>!c.Contains("::")||c.StartsWith(scope+"::")).Select(c=>c.Contains("::")?c.Substring(c.IndexOf("::")+2):c).Concat(db.Entries.Where(item=>item.Get("collection")==scope).Select(item=>item.Get("category"))).Where(v=>v.Length>0).Distinct().OrderBy(v=>v).ToList();
- var order=db.CategoryOrder.Where(c=>c.StartsWith(scope+"::")).Select(c=>c.Substring(scope.Length+2)).Where(values.Contains);
- return order.Concat(values).Distinct().ToList();}
+ return CategoryCatalog.Values(db,scope);}
  void SetChoiceEnabled(string key,string scope,string value,bool enabled){string id=ChoiceId(key,scope,value);db.DisabledChoices.RemoveAll(c=>c==id);if(!enabled)db.DisabledChoices.Add(id);Changed();RefreshAll();}
  void SetCategoryOrder(string scope,IEnumerable<string> values){db.CategoryOrder.RemoveAll(c=>c.StartsWith(scope+"::"));db.CategoryOrder.AddRange(values.Distinct().Select(v=>scope+"::"+v));Changed();RefreshAll();}
- void RemoveChoice(string key,string value,string scope=null){foreach(var item in db.Entries.Where(item=>item.Get(key)==value&&(key=="model"||scope==null||item.Get("collection")==scope)))item.Set(key,"");if(key=="model"){db.Models.RemoveAll(v=>v==value);db.DisabledChoices.RemoveAll(c=>c==ChoiceId(key,"",value));}else foreach(var sc in new[]{"Personales","404"}.Where(sc=>scope==null||sc==scope)){db.Categories.RemoveAll(c=>c==sc+"::"+value||c==value);db.CategoryOrder.RemoveAll(c=>c==sc+"::"+value);db.DisabledChoices.RemoveAll(c=>c==ChoiceId(key,sc,value));}Changed();Save();RefreshAll();}
- void RenameChoice(string key,string scope,string old,string value){foreach(var item in db.Entries.Where(item=>item.Get(key)==old&&(key=="model"||item.Get("collection")==scope)))item.Set(key,value);if(key=="model"){db.Models.RemoveAll(v=>v==old);if(!db.Models.Contains(value))db.Models.Add(value);}else{db.Categories=db.Categories.Select(c=>c==scope+"::"+old?scope+"::"+value:c).Distinct().ToList();db.CategoryOrder=db.CategoryOrder.Select(c=>c==scope+"::"+old?scope+"::"+value:c).Distinct().ToList();}string oldId=ChoiceId(key,scope,old),newId=ChoiceId(key,scope,value);db.DisabledChoices=db.DisabledChoices.Select(c=>c==oldId?newId:c).Distinct().ToList();Changed();RefreshAll();}
+ void RemoveChoice(string key,string value,string scope=null){
+  if(key=="category"){
+   foreach(var sc in new[]{"Personales","404"}.Where(sc=>scope==null||sc==scope))CategoryCatalog.Remove(db,sc,value);
+  }else{
+   foreach(var item in db.Entries.Where(item=>item.Get(key)==value))item.Set(key,"");
+   db.Models.RemoveAll(v=>v==value);
+   db.DisabledChoices.RemoveAll(c=>c==ChoiceId(key,"",value));
+  }
+  Changed();Save();RefreshAll();
+ }
+ void RenameChoice(string key,string scope,string old,string value){
+  if(key=="category")CategoryCatalog.Rename(db,scope,old,value);
+  else{
+   foreach(var item in db.Entries.Where(item=>item.Get(key)==old))item.Set(key,value);
+   db.Models.RemoveAll(v=>v==old);if(!db.Models.Contains(value))db.Models.Add(value);
+   string oldId=ChoiceId(key,scope,old),newId=ChoiceId(key,scope,value);
+   db.DisabledChoices=db.DisabledChoices.Select(c=>c==oldId?newId:c).Distinct().ToList();
+  }
+  Changed();RefreshAll();
+ }
  void ManageChoices(string key){using(var f=UI.Dialog(key=="model"?"Gestionar modelos":"Gestionar categorías",650,600)){
- var top=new Panel{Dock=DockStyle.Top,Height=108,Padding=new Padding(12),BackColor=UI.Panel};var scopeBox=Combo(150);scopeBox.Items.AddRange(new object[]{"Personales","404"});scopeBox.SelectedItem=collection.Text=="404"?"404":"Personales";scopeBox.Visible=key=="category";scopeBox.Location=new Point(12,12);top.Controls.Add(scopeBox);var label=new Label{Text=key=="category"?"Marcada: disponible para asignar. Desmarcada: oculta, conserva sus prompts.\nArrastrá desde el nombre para ordenar. El orden también se usa en los desplegables.":"Marcado: disponible para asignar. Desmarcado: oculto, conserva sus prompts.",AutoSize=false,Dock=DockStyle.Bottom,Height=55};top.Controls.Add(label);
- var list=new CheckedListBox{Dock=DockStyle.Fill,BorderStyle=BorderStyle.None,CheckOnClick=true,AllowDrop=key=="category",IntegralHeight=false};UI.Style(list);bool filling=false;Action fill=()=>{filling=true;list.Items.Clear();foreach(var value in CatalogValues(key,scopeBox.Text))list.Items.Add(value,ChoiceEnabled(key,scopeBox.Text,value));filling=false;};fill();scopeBox.SelectedIndexChanged+=(sender,args)=>fill();
+ var top=new Panel{Dock=DockStyle.Top,Height=108,Padding=new Padding(12),BackColor=UI.Panel};var scopeBox=Combo(150);scopeBox.Items.AddRange(new object[]{"Personales","404"});scopeBox.SelectedItem=collection.Text=="404"?"404":"Personales";scopeBox.Visible=key=="category";scopeBox.Location=new Point(12,12);top.Controls.Add(scopeBox);var label=new Label{Text=key=="category"?"Desmarcá una carpeta para ocultar esa rama al asignar prompts.\nArrastrá para ordenar carpetas del mismo nivel.":"Marcado: disponible para asignar. Desmarcado: oculto, conserva sus prompts.",AutoSize=false,Dock=DockStyle.Bottom,Height=55};top.Controls.Add(label);
+ var list=new CheckedListBox{Dock=DockStyle.Fill,BorderStyle=BorderStyle.None,CheckOnClick=true,AllowDrop=key=="category",IntegralHeight=false};UI.Style(list);bool filling=false;Action fill=()=>{filling=true;list.Items.Clear();foreach(var value in CatalogValues(key,scopeBox.Text))list.Items.Add(value,!db.DisabledChoices.Contains(ChoiceId(key,scopeBox.Text,value)));filling=false;};fill();scopeBox.SelectedIndexChanged+=(sender,args)=>fill();
  list.ItemCheck+=(sender,args)=>{if(filling)return;if(key=="category"&&Control.MouseButtons==MouseButtons.Left&&list.PointToClient(Control.MousePosition).X>=26){args.NewValue=args.CurrentValue;return;}string value=list.Items[args.Index].ToString(),scope=scopeBox.Text;bool enabled=args.NewValue==CheckState.Checked;f.BeginInvoke((Action)(()=>{SetChoiceEnabled(key,scope,value,enabled);}));};
- int dragIndex=-1;Point dragStart=Point.Empty;list.MouseDown+=(sender,args)=>{dragIndex=args.X<26?-1:list.IndexFromPoint(args.Location);dragStart=args.Location;};list.MouseMove+=(sender,args)=>{if(key!="category"||dragIndex<0||args.Button!=MouseButtons.Left||Math.Abs(args.X-dragStart.X)+Math.Abs(args.Y-dragStart.Y)<8)return;int index=dragIndex;dragIndex=-1;list.DoDragDrop(index,DragDropEffects.Move);};list.DragEnter+=(sender,args)=>{args.Effect=args.Data.GetDataPresent(typeof(int))?DragDropEffects.Move:DragDropEffects.None;};list.DragOver+=(sender,args)=>{args.Effect=DragDropEffects.Move;};list.DragDrop+=(sender,args)=>{if(!args.Data.GetDataPresent(typeof(int)))return;int from=(int)args.Data.GetData(typeof(int));int to=list.IndexFromPoint(list.PointToClient(new Point(args.X,args.Y)));if(to<0)to=list.Items.Count-1;if(from<0||from>=list.Items.Count||to<0||from==to)return;var values=list.Items.Cast<object>().Select(v=>v.ToString()).ToList();string moved=values[from];values.RemoveAt(from);values.Insert(to,moved);SetCategoryOrder(scopeBox.Text,values);fill();list.SelectedItem=moved;};
- var bar=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=115,Padding=new Padding(8),BackColor=UI.Panel};bar.Controls.Add(UI.Button("Crear",()=>{CreateChoice(f,key,scopeBox.Text);fill();RefreshAll();}));bar.Controls.Add(UI.Button("Renombrar",()=>{if(list.SelectedItem==null)return;string old=list.SelectedItem.ToString();string value=UI.Ask(f,"Nuevo nombre",old);if(String.IsNullOrWhiteSpace(value)||value.Trim()==old)return;RenameChoice(key,scopeBox.Text,old,value.Trim());fill();}));
- bar.Controls.Add(UI.Button("Eliminar",()=>{if(list.SelectedItem==null)return;string value=list.SelectedItem.ToString();int count=db.Entries.Count(item=>item.Get(key)==value&&(key=="model"||item.Get("collection")==scopeBox.Text));if(!UI.Confirm(f,"¿Eliminar «"+value+"»?\n\n"+count+" prompts quedarán con este campo vacío. Para ocultarla sin borrar asignaciones, desmarcá la casilla."))return;RemoveChoice(key,value,key=="model"?null:scopeBox.Text);fill();}));
+ int dragIndex=-1;Point dragStart=Point.Empty;list.MouseDown+=(sender,args)=>{dragIndex=args.X<26?-1:list.IndexFromPoint(args.Location);dragStart=args.Location;};list.MouseMove+=(sender,args)=>{if(key!="category"||dragIndex<0||args.Button!=MouseButtons.Left||Math.Abs(args.X-dragStart.X)+Math.Abs(args.Y-dragStart.Y)<8)return;int index=dragIndex;dragIndex=-1;list.DoDragDrop(index,DragDropEffects.Move);};list.DragEnter+=(sender,args)=>{args.Effect=args.Data.GetDataPresent(typeof(int))?DragDropEffects.Move:DragDropEffects.None;};list.DragOver+=(sender,args)=>{args.Effect=DragDropEffects.Move;};list.DragDrop+=(sender,args)=>{if(!args.Data.GetDataPresent(typeof(int)))return;int from=(int)args.Data.GetData(typeof(int));int to=list.IndexFromPoint(list.PointToClient(new Point(args.X,args.Y)));if(to<0)to=list.Items.Count-1;if(from<0||from>=list.Items.Count||to<0||from==to)return;var values=list.Items.Cast<object>().Select(v=>v.ToString()).ToList();string moved=values[from];if(CategoryFolders.Parent(db,scopeBox.Text,moved)!=CategoryFolders.Parent(db,scopeBox.Text,values[to]))return;values.RemoveAt(from);values.Insert(to,moved);SetCategoryOrder(scopeBox.Text,values);fill();list.SelectedItem=moved;};
+ var bar=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=115,Padding=new Padding(8),BackColor=UI.Panel};bar.Controls.Add(UI.Button("Crear",()=>{CreateChoice(f,key,scopeBox.Text);fill();RefreshAll();}));bar.Controls.Add(UI.Button("Renombrar",()=>{if(list.SelectedItem==null)return;string old=list.SelectedItem.ToString();string parent=key=="category"?CategoryFolders.Parent(db,scopeBox.Text,old):null;string leaf=parent==null?old:old.Substring(parent.Length+CategoryFolders.Separator.Length);string value=UI.Ask(f,"Nuevo nombre",leaf);if(String.IsNullOrWhiteSpace(value)||value.Trim()==leaf)return;RenameChoice(key,scopeBox.Text,old,value.Trim());fill();}));
+ bar.Controls.Add(UI.Button("Eliminar",()=>{
+  if(list.SelectedItem==null)return;
+  string value=list.SelectedItem.ToString(), scope=scopeBox.Text;
+  var branch=key=="category"?CategoryCatalog.Branch(db,scope,value):new List<string>{value};
+  int count=db.Entries.Count(item=>branch.Contains(item.Get(key))&&(key=="model"||item.Get("collection")==scope));
+  string descendants=branch.Count>1?" y sus "+(branch.Count-1)+" subcarpetas":"";
+  if(!UI.Confirm(f,"¿Eliminar «"+value+"»"+descendants+"?\n\n"+count+" prompts quedarán con este campo vacío. Para ocultar la opción, desmarcá su casilla."))return;
+  RemoveChoice(key,value,key=="model"?null:scope);fill();
+ }));
  if(key=="category")bar.Controls.Add(UI.Button("Ordenar A–Z",()=>{SetCategoryOrder(scopeBox.Text,CatalogValues(key,scopeBox.Text).OrderBy(v=>v));fill();}));bar.Controls.Add(UI.Button("Cerrar",()=>{Save();f.Close();}));f.Controls.Add(list);f.Controls.Add(top);f.Controls.Add(bar);f.ShowDialog(this);}}
 
  void Changed(string group=""){if(history!=null){if(group==null)history.UpdateBaseline(db);else history.Record(db,group);}dirty=true;CloudLocalChanged();UpdateEditorSummary();status.Text="Guardando cambios…";saveTimer.Stop();saveTimer.Start();}
  bool Save(){try{grid.EndEdit();if(!dirty)return true;db.Save();dirty=false;CloudLocalSaved();UpdateEditorSummary();status.Text="●  Todo guardado · "+DateTime.Now.ToString("HH:mm:ss")+" · "+db.Entries.Count+" prompts";return true;}catch(Exception e){saveBadge.Text="Sin guardar";saveBadge.ForeColor=Color.FromArgb(248,174,127);status.Text="ERROR AL GUARDAR · "+e.Message;MessageBox.Show(this,"No se pudo guardar. El programa conservará los cambios en memoria. Exportá un respaldo antes de salir.\n\n"+e.Message,"Error de guardado",MessageBoxButtons.OK,MessageBoxIcon.Error);return false;}}
- void RefreshFilters(){busy=true;string cat=Convert.ToString(categories.SelectedItem),mod=Convert.ToString(model.SelectedItem);categories.Items.Clear();categories.Items.Add("Todas las categorías");var active=collection.Text=="Todos"?CatalogValues("category","Personales").Where(c=>ChoiceEnabled("category","Personales",c)).Concat(CatalogValues("category","404").Where(c=>ChoiceEnabled("category","404",c))).Distinct():CatalogValues("category",collection.Text).Where(c=>ChoiceEnabled("category",collection.Text,c));foreach(string c in active)categories.Items.Add(c);categories.SelectedItem=cat;if(categories.SelectedIndex<0)categories.SelectedIndex=0;model.Items.Clear();model.Items.Add("Todos los modelos");foreach(string m in CatalogValues("model").Where(m=>ChoiceEnabled("model","",m)))model.Items.Add(m);model.SelectedItem=mod;if(model.SelectedIndex<0)model.SelectedIndex=0;busy=false;}
+
 
  void RefreshAll(){gridGeneration++;orderPending=false;RefreshFilters();busy=true;grid.CurrentCell=null;grid.Rows.Clear();grid.Columns.Clear();var columns=new List<DataGridViewColumn>();
  columns.Add(new DataGridViewButtonColumn{Name="copy",HeaderText="Copiar",Text="Copiar",FlatStyle=FlatStyle.Flat,UseColumnTextForButtonValue=true,Width=75,ReadOnly=true});
@@ -183,7 +213,7 @@ public partial class MainWindow:DarkForm {
  }
 
  void AddEntry(){
-  var e=new Entry();e.Set("collection",collection.Text=="404"?"404":"Personales");
+  var e=new Entry();e.Set("collection",CategoryCreationScope());
   e.Set("category",categories.SelectedIndex>0?categories.Text:"");e.Set("model",model.SelectedIndex>0?model.Text:"");e.Set("name","Nuevo prompt");
   db.Entries.Add(e);selected=e;Changed();RevealEntry(e);entryTitle.Focus();entryTitle.SelectAll();
  }
@@ -205,10 +235,12 @@ public partial class MainWindow:DarkForm {
   var bottom=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=56};bottom.Controls.Add(UI.Button("Guardar",()=>{
    if(String.IsNullOrWhiteSpace(boxes["name"].Text)){MessageBox.Show("Poné un nombre.");return;}
    if(boxes.Values.Any(c=>c.Text==NewChoice))return;
+   string category=boxes["category"].Text;
+   if(category==entry.Get("category"))category=CategoryForCollection(entry.Get("collection"),scope(),category);
    foreach(var pair in boxes){
     var box=pair.Value as TextBox;
     if(box!=null && box.Multiline && box.Text==PromptText.ForWindows(entry.Get(pair.Key)))continue;
-    entry.Set(pair.Key,pair.Value.Text);
+    entry.Set(pair.Key,pair.Key=="category"?category:pair.Value.Text);
    }
    RegisterChoice("category",scope(),entry.Get("category"));RegisterChoice("model",scope(),entry.Get("model"));f.DialogResult=DialogResult.OK;
   }));bottom.Controls.Add(UI.Button("Cancelar",()=>f.DialogResult=DialogResult.Cancel));f.Controls.Add(fields);f.Controls.Add(bottom);return f.ShowDialog(this)==DialogResult.OK;
@@ -216,7 +248,16 @@ public partial class MainWindow:DarkForm {
  List<string> ChoiceValues(string key,string scope){if(key=="collection")return new List<string>{"Personales","404"};return new[]{""}.Concat(CatalogValues(key,scope).Where(v=>ChoiceEnabled(key,scope,v))).ToList();}
 
  void RegisterChoice(string key,string scope,string value){if(String.IsNullOrWhiteSpace(value)||value==NewChoice)return;value=value.Trim();if(key=="model"){if(!db.Models.Contains(value))db.Models.Add(value);}else if(key=="category"){string stored=scope+"::"+value;if(!db.Categories.Contains(stored))db.Categories.Add(stored);}}
- string CreateChoice(IWin32Window owner,string key,string scope){string value=UI.Ask(owner,key=="model"?"Nuevo modelo":"Nueva categoría","");if(String.IsNullOrWhiteSpace(value))return null;value=value.Trim();if(value==NewChoice)throw new Exception("Elegí otro nombre.");db.DisabledChoices.RemoveAll(c=>c==ChoiceId(key,scope,value));RegisterChoice(key,scope,value);Changed();return value;}
+ string CreateChoice(IWin32Window owner,string key,string scope){
+  string value=UI.Ask(owner,key=="model"?"Nuevo modelo":"Nueva categoría","");
+  if(String.IsNullOrWhiteSpace(value))return null;
+  value=value.Trim();if(value==NewChoice)throw new Exception("Elegí otro nombre.");
+  if(key=="category" && CatalogValues(key,scope).Any(existing=>
+    String.Equals(existing,value,StringComparison.OrdinalIgnoreCase) &&
+    (existing!=value || CategoryFolders.Parent(db,scope,existing)!=null)))
+   throw new Exception("Ya existe una carpeta con ese nombre o ruta en esta colección.");
+  db.DisabledChoices.RemoveAll(c=>c==ChoiceId(key,scope,value));RegisterChoice(key,scope,value);Changed();return value;
+ }
  void FillChoiceBox(ComboBox cb,string key,string scope,string current){cb.Items.Clear();foreach(var value in ChoiceValues(key,scope).Concat(new[]{current}).Distinct())cb.Items.Add(value);if(key!="collection")cb.Items.Add(NewChoice);cb.SelectedItem=current;}
  ComboBox ChoiceBox(Form owner,string key,Func<string> scope,string current){var cb=Combo(220);FillChoiceBox(cb,key,scope(),current);string previous=current;cb.SelectionChangeCommitted+=(sender,args)=>{if(cb.Text==NewChoice){string created=CreateChoice(owner,key,scope());FillChoiceBox(cb,key,scope(),created??previous);}previous=cb.Text;};return cb;}
  void GridChoiceCommitted(object sender,EventArgs args){var cb=sender as ComboBox;if(cb==null||grid.CurrentCell==null)return;string key=grid.CurrentCell.OwningColumn.Name;if(key!="category"&&key!="model")return;var entry=(Entry)grid.CurrentRow.Tag;if(cb.Text==NewChoice){string value=CreateChoice(this,key,entry.Get("collection"))??entry.Get(key);var cell=(DataGridViewComboBoxCell)grid.CurrentCell;if(!cell.Items.Contains(value))cell.Items.Insert(cell.Items.Count-1,value);if(!cb.Items.Contains(value))cb.Items.Insert(cb.Items.Count-1,value);cb.SelectedItem=value;grid.CurrentCell.Value=value;}grid.CommitEdit(DataGridViewDataErrorContexts.Commit);entry.Set(key,cb.Text);RegisterChoice(key,entry.Get("collection"),cb.Text);Changed();}
@@ -224,7 +265,31 @@ public partial class MainWindow:DarkForm {
  void AddColumn(){string title=UI.Ask(this,"Crear columna · nombre","");if(String.IsNullOrWhiteSpace(title))return;CaptureColumnOrder();var field=new Field{Id="custom_"+Guid.NewGuid().ToString("N"),Title=title.Trim()};db.Fields.Add(field);db.ColumnOrder.Add(field.Id);Changed();RefreshAll();SwitchMode(true);grid.FirstDisplayedScrollingColumnIndex=grid.Columns[field.Id].Index;}
  void AddModel(){string value=CreateChoice(this,"model",collection.Text=="404"?"404":"Personales");if(value==null)return;RefreshAll();model.SelectedItem=value;}
 
- void Duplicate(){if(selected==null)return;var e=selected.Clone();e.Set("name",e.Get("name")+" · copia");e.Set("collection","Personales");db.Entries.Add(e);selected=e;Changed();RevealEntry(e);}
+ string CategoryForCollection(string source,string destination,string category){
+  if(source==destination || CategoryFolders.Parent(db,source,category)==null)return category;
+  var names=CatalogValues("category",destination);
+  var segments=new Stack<string>();
+  string path=category;
+  while(!names.Contains(path,StringComparer.OrdinalIgnoreCase)){
+   string parent=CategoryFolders.Parent(db,source,path);
+   if(parent==null){RegisterChoice("category",destination,path);break;}
+   segments.Push(path.Substring(parent.Length+CategoryFolders.Separator.Length));
+   path=parent;
+  }
+  if(!names.Contains(path))
+   path=names.FirstOrDefault(n=>String.Equals(n,path,StringComparison.OrdinalIgnoreCase))??path;
+  while(segments.Count>0){
+   string leaf=segments.Pop();
+   string next=path+CategoryFolders.Separator+leaf;
+   path=names.FirstOrDefault(n=>String.Equals(n,next,StringComparison.OrdinalIgnoreCase))??CategoryFolders.Create(db,destination,path,leaf);
+  }
+  return path;
+ }
+ void SetEntryChoice(Entry item,string key,string value){
+  if(key=="collection")item.Set("category",CategoryForCollection(item.Get("collection"),value,item.Get("category")));
+  item.Set(key,value);
+ }
+ void Duplicate(){if(selected==null)return;var e=selected.Clone();e.Set("name",e.Get("name")+" · copia");SetEntryChoice(e,"collection","Personales");db.Entries.Add(e);selected=e;Changed();RevealEntry(e);}
  void Delete(){if(selected==null)return;if(!UI.Confirm(this,"¿Eliminar «"+selected.Get("name")+"»? Podés recuperar el estado anterior desde Respaldos."))return;db.Entries.Remove(selected);selected=null;Changed();Save();RegisterKeys();RefreshAll();}
  void AddCategory(){
   string scope=collection.Text=="404"?"404":"Personales";
@@ -289,7 +354,7 @@ public partial class MainWindow:DarkForm {
  void ManageFields(){using(var f=UI.Dialog("Columnas · arrastrá encabezados para reordenar",580,540)){var list=new CheckedListBox{Dock=DockStyle.Fill,CheckOnClick=true};UI.Style(list);foreach(var field in db.Fields)list.Items.Add(field.Title,field.Visible);var bar=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=100};bar.Controls.Add(UI.Button("+ Columna",()=>{string title=UI.Ask(f,"Nombre de columna","");if(String.IsNullOrWhiteSpace(title))return;db.Fields.Add(new Field{Id="custom_"+Guid.NewGuid().ToString("N"),Title=title});list.Items.Add(title,true);Changed();}));bar.Controls.Add(UI.Button("Renombrar",()=>{int i=list.SelectedIndex;if(i<0)return;string title=UI.Ask(f,"Nombre de columna",db.Fields[i].Title);if(String.IsNullOrWhiteSpace(title))return;db.Fields[i].Title=title;list.Items[i]=title;Changed();}));bar.Controls.Add(UI.Button("Eliminar",()=>{int i=list.SelectedIndex;if(i<0)return;var field=db.Fields[i];if(!field.Id.StartsWith("custom_")){MessageBox.Show("Las columnas base se pueden ocultar y renombrar, pero se conservan para las funciones del programa.");return;}if(!UI.Confirm(f,"¿Eliminar la columna y sus valores? El estado anterior queda en Respaldos."))return;db.Fields.RemoveAt(i);foreach(var e in db.Entries)e.Cells.Remove(field.Id);list.Items.RemoveAt(i);Changed();}));bar.Controls.Add(UI.Button("Aplicar y cerrar",()=>{for(int i=0;i<db.Fields.Count;i++)db.Fields[i].Visible=list.GetItemChecked(i);Changed();f.Close();}));f.Controls.Add(list);f.Controls.Add(bar);f.ShowDialog(this);RefreshAll();}}
  void Export(){using(var d=new SaveFileDialog{Filter="Excel (*.xlsx)|*.xlsx",FileName="Mis_prompts.xlsx"})if(d.ShowDialog(this)==DialogResult.OK){grid.EndEdit();Excel.Write(d.FileName,db);status.Text="Excel exportado: "+d.FileName;}}
  void Backups(){using(var f=UI.Dialog("Respaldos e historial recuperable",720,500)){var label=new Label{Text="Se conservan los últimos 200 estados guardados. Restaurar reemplaza el catálogo completo.\nExportá un respaldo a otra unidad para protegerte ante fallas del disco.",Dock=DockStyle.Top,Height=55};var list=new ListBox{Dock=DockStyle.Fill};UI.Style(list);foreach(var path in Directory.GetFiles(Path.Combine(db.Folder,"Historial"),"*.xml").OrderByDescending(p=>p))list.Items.Add(Path.GetFileName(path));var bar=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=100};bar.Controls.Add(UI.Button("Exportar respaldo completo",()=>{using(var d=new SaveFileDialog{Filter="Respaldo PromptDesk (*.xml)|*.xml",FileName="PromptDesk_"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".xml"})if(d.ShowDialog(f)==DialogResult.OK)db.Export(d.FileName);}));bar.Controls.Add(UI.Button("Restaurar seleccionado",()=>{if(list.SelectedItem!=null)Restore(Path.Combine(db.Folder,"Historial",list.SelectedItem.ToString()),f);}));bar.Controls.Add(UI.Button("Importar respaldo",()=>{using(var d=new OpenFileDialog{Filter="Respaldo PromptDesk (*.xml)|*.xml"})if(d.ShowDialog(f)==DialogResult.OK)Restore(d.FileName,f);}));bar.Controls.Add(UI.Button("Abrir carpeta de datos",()=>System.Diagnostics.Process.Start(db.Folder)));f.Controls.Add(list);f.Controls.Add(label);f.Controls.Add(bar);f.ShowDialog(this);}}
- void Restore(string path,Form dialog){if(!UI.Confirm(dialog,"¿Restaurar este catálogo completo? Se guardará una copia del estado actual."))return;var candidate=new Store(db.Folder);candidate.Load(path);dirty=true;if(!Save())return;db.Fields=candidate.Fields;db.Entries=candidate.Entries;db.Categories=candidate.Categories;db.Models=candidate.Models;db.ColumnOrder=candidate.ColumnOrder;db.CategoryOrder=candidate.CategoryOrder;db.DisabledChoices=candidate.DisabledChoices;dirty=true;if(Save()){history=new UndoHistory(db);RegisterKeys();RefreshAll();dialog.Close();}}
+ void Restore(string path,Form dialog){if(!UI.Confirm(dialog,"¿Restaurar este catálogo completo? Se guardará una copia del estado actual."))return;var candidate=new Store(db.Folder);candidate.Load(path);dirty=true;if(!Save())return;db.Fields=candidate.Fields;db.Entries=candidate.Entries;db.Categories=candidate.Categories;db.Subfolders=candidate.Subfolders;db.Models=candidate.Models;db.ColumnOrder=candidate.ColumnOrder;db.CategoryOrder=candidate.CategoryOrder;db.DisabledChoices=candidate.DisabledChoices;dirty=true;if(Save()){history=new UndoHistory(db);RegisterKeys();RefreshAll();dialog.Close();}}
  void Import(){using(var d=new OpenFileDialog{Filter="Excel (*.xlsx)|*.xlsx"}){if(d.ShowDialog(this)!=DialogResult.OK)return;var sheets=Excel.Read(d.FileName);if(sheets.Count==0)throw new Exception("El archivo no contiene hojas.");using(var f=UI.Dialog("Importar Excel · asignar columnas",850,640)){var sheet=Combo(220);foreach(var s in sheets)sheet.Items.Add(s.Name);sheet.SelectedIndex=0;var header=new NumericUpDown{Minimum=1,Maximum=10000,Value=1,Width=70};var dest=Combo(140);dest.Items.AddRange(new object[]{"Personales","404"});dest.SelectedIndex=0;var top=Bar(55);top.Controls.Add(sheet);top.Controls.Add(new Label{Text="Fila de títulos",AutoSize=true,Padding=new Padding(0,8,0,0)});top.Controls.Add(header);top.Controls.Add(dest);var table=new DataGridView{Dock=DockStyle.Fill,AllowUserToAddRows=false,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill};table.Columns.Add(new DataGridViewTextBoxColumn{Name="source",HeaderText="Columna Excel",ReadOnly=true});table.Columns.Add(new DataGridViewTextBoxColumn{Name="sample",HeaderText="Ejemplo",ReadOnly=true});var map=new DataGridViewComboBoxColumn{Name="target",HeaderText="Usar como"};map.Items.Add("Ignorar");map.Items.Add("Crear columna nueva");foreach(var field in db.Fields)map.Items.Add(field.Title+" ["+field.Id+"]");table.Columns.Add(map);
   Action fill=()=>{table.Rows.Clear();var data=sheets[sheet.SelectedIndex];int h=(int)header.Value-1;if(h>=data.Rows.Count)return;var labels=data.Rows[h];for(int c=0;c<labels.Count;c++){string sample=h+1<data.Rows.Count&&c<data.Rows[h+1].Count?data.Rows[h+1][c]:"";if(sample.Length>120)sample=sample.Substring(0,120)+"…";string target="Crear columna nueva",norm=labels[c].ToLowerInvariant();string key=norm.Contains("prom")?"prompt":norm.Contains("categor")?"category":norm.Contains("nombre")?"name":norm.Contains("descrip")?"description":norm.Contains("modelo")?"model":norm.Contains("nota")?"note":norm.Contains("colecci")?"collection":"";var field=db.Fields.FirstOrDefault(a=>a.Id==key);if(field!=null)target=field.Title+" ["+field.Id+"]";table.Rows.Add(labels[c],sample,target);}};sheet.SelectedIndexChanged+=(s,e)=>fill();header.ValueChanged+=(s,e)=>fill();fill();
   var bottom=Bar(55);bottom.Dock=DockStyle.Bottom;bottom.Controls.Add(UI.Button("Importar como nuevos",()=>{table.EndEdit();var data=sheets[sheet.SelectedIndex];int h=(int)header.Value-1;if(h>=data.Rows.Count)throw new Exception("La fila de títulos no existe.");var mapping=new Dictionary<int,string>();var additions=new List<Field>();foreach(DataGridViewRow r in table.Rows){string target=Convert.ToString(r.Cells[2].Value);if(target=="Ignorar")continue;string key;if(target=="Crear columna nueva"){key="custom_"+Guid.NewGuid().ToString("N");additions.Add(new Field{Id=key,Title=String.IsNullOrWhiteSpace(Convert.ToString(r.Cells[0].Value))?"Columna "+(r.Index+1):Convert.ToString(r.Cells[0].Value)});}else key=target.Substring(target.LastIndexOf('[')+1).TrimEnd(']');if(mapping.Values.Contains(key))throw new Exception("Asignaste dos columnas al mismo campo.");mapping[r.Index]=key;}if(!mapping.Values.Contains("prompt"))throw new Exception("Elegí una columna para Prompt.");var added=new List<Entry>();var existingPrompts=new HashSet<string>(db.Entries.Select(a=>a.Get("prompt")),StringComparer.Ordinal);int duplicate=0,empty=0;foreach(var row in data.Rows.Skip(h+1)){var item=new Entry();item.Set("collection",dest.Text);foreach(var pair in mapping)item.Set(pair.Value,pair.Key<row.Count?row[pair.Key]:"");if(String.IsNullOrWhiteSpace(item.Get("prompt"))){empty++;continue;}if(!existingPrompts.Add(item.Get("prompt"))){duplicate++;continue;}if(item.Get("collection")!="404"&&item.Get("collection")!="Personales")item.Set("collection",dest.Text);if(String.IsNullOrWhiteSpace(item.Get("name")))item.Set("name","Importado "+(added.Count+1));added.Add(item);}if(!UI.Confirm(f,"Agregar "+added.Count+" prompts.\nOmitir "+duplicate+" duplicados exactos y "+empty+" filas sin prompt.\nNo se reemplazará ningún prompt existente."))return;db.Fields.AddRange(additions);db.Entries.AddRange(added);Changed();Save();RefreshAll();f.Close();}));bottom.Controls.Add(UI.Button("Cancelar",()=>f.Close()));f.Controls.Add(table);f.Controls.Add(top);f.Controls.Add(bottom);f.ShowDialog(this);}}}

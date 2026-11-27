@@ -33,6 +33,7 @@ herramientas menos frecuentes están agrupadas en menús.
 
 - Buscar por varias palabras en nombre, texto y otros campos, sin distinguir tildes o mayúsculas.
 - Acceder a todos los prompts, favoritos y recientes.
+- Elegí una categoría y usá **+ → Nueva subcarpeta** para crear carpetas dentro de ella. Podés anidarlas, crear prompts en la carpeta elegida o mover uno desde el desplegable **Categoría** de su ficha.
 - Archivar desde **Más** y consultar el histórico en **Archivados**. Restaurar devuelve el prompt a su colección y categoría con sus variables y favorito. El atajo global queda en pausa durante el archivo.
 - Usar **Lista** para recorrer contenido y **Tabla** para editar columnas personalizadas.
 - Guardado automático, deshacer/rehacer, variables al copiar y atajos globales.
@@ -56,8 +57,8 @@ También admite uso portable desde la carpeta extraída.
 
 Las actualizaciones se aplican directamente en la PC. Cerrá PromptDesk para
 instalar la compilación probada en su carpeta de ejecución. La biblioteca y
-los respaldos se guardan por separado. Para usar la botonera y sincronizar
-la opción seleccionada entre equipos, actualizá ambos a 1.3.4 o posterior.
+los respaldos se guardan por separado. Para sincronizar las subcarpetas entre
+la PC y la notebook, usá 1.3.5 o posterior en ambos equipos.
 
 ## Datos personales
 
