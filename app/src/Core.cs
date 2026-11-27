@@ -260,6 +260,15 @@ namespace PromptDesk
         }
     }
 
+    internal static class PromptText
+    {
+        // The Windows multiline editor and clipboard expect a CRLF for each actual line break.
+        internal static string ForWindows(string text)
+        {
+            return text.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
+        }
+    }
+
     public static class Templates
     {
         public static string Render(Entry entry)

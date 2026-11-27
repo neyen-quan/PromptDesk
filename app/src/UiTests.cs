@@ -80,9 +80,10 @@ namespace PromptDesk
         {
             var entry = new Entry();
             entry.Set("name", "Iluminación de estudio");
-            entry.Set("prompt", "Escena: {{luz}}.");
+            const string template = "Escena:\n\n{{luz}}.\rFin.";
+            entry.Set("prompt", template);
             var variable = new Variable { Token = "{{luz}}", Label = "Iluminación", Value = "Luz anterior" };
-            variable.Options.Add(new VariableOption { Label = "Suave", Value = "Luz difusa\r\ncon sombras suaves" });
+            variable.Options.Add(new VariableOption { Label = "Suave", Value = "Luz difusa\ncon sombras suaves" });
             variable.Options.Add(new VariableOption { Label = "Directa", Value = "Luz frontal" });
             entry.Variables.Add(variable);
             using (var form = VariableEditor.Create(entry))
@@ -112,7 +113,7 @@ namespace PromptDesk
                     var choice = (ComboBox)dialog.Controls.Find("variableChoice0", true).Single();
                     choice.SelectedIndex = 0;
                     var value = (TextBox)dialog.Controls.Find("variableValue0", true).Single();
-                    Check(value.ReadOnly && value.Text == variable.Options[0].Value, "Elegir una opción muestra su texto completo");
+                    Check(value.ReadOnly && value.Text == "Luz difusa\r\ncon sombras suaves", "Elegir una opción muestra sus dos líneas");
                     using (var bitmap = new Bitmap(dialog.Width, dialog.Height))
                     {
                         dialog.DrawToBitmap(bitmap, new Rectangle(Point.Empty, dialog.Size));
@@ -124,9 +125,9 @@ namespace PromptDesk
             });
             Call(window, "Copy", entry);
             if (dialogError != null) throw dialogError;
-            Check(variable.Value == variable.Options[0].Value && Clipboard.GetText() == "Escena: " + variable.Value + ".",
+            Check(variable.Value == variable.Options[0].Value && Clipboard.GetText() == "Escena:\r\n\r\nLuz difusa\r\ncon sombras suaves.\r\nFin.",
                 "Copiar usa el texto de la opción, con sus saltos de línea");
-            Check(entry.Get("prompt") == "Escena: {{luz}}.", "Copiar conserva el marcador en la plantilla");
+            Check(entry.Get("prompt") == template, "Copiar conserva el marcador y los separadores originales en la plantilla");
             using (var form = window.CreateVariableValuesDialog(entry))
             {
                 form.Show(window); Pump(50);
@@ -189,6 +190,9 @@ namespace PromptDesk
                     if (i == 1) entry.LastUsed = DateTime.UtcNow.ToString("o");
                     store.Entries.Add(entry);
                 }
+                const string mixedEndings = "Título\n\nPrimer párrafo\rSegundo párrafo\r\nFin\\n";
+                const string windowsEndings = "Título\r\n\r\nPrimer párrafo\r\nSegundo párrafo\r\nFin\\n";
+                store.Entries[6].Set("prompt", mixedEndings);
                 store.Save();
                 using (var window = new MainWindow(store, true))
                 {
@@ -200,6 +204,17 @@ namespace PromptDesk
                     var editor = Field<TextBox>(window, "editor");
                     collection.SelectedItem = "Todos";
                     Wait(() => library.Items.Count == 8, "El catálogo no se carga completo");
+                    var mixedEntry = store.Entries[6];
+                    library.SelectedItem = mixedEntry; Pump(50);
+                    Check(editor.Text == windowsEndings && editor.GetLineFromCharIndex(editor.Text.IndexOf("Primer")) == 2,
+                        "El editor muestra separados los párrafos importados y conserva la línea en blanco");
+                    Call(window, "Copy", mixedEntry);
+                    using (var destination = new TextBox { Multiline = true })
+                    {
+                        destination.Paste();
+                        Check(destination.Text == windowsEndings, "Pegar en otro control conserva las líneas, los blancos y la secuencia literal de barra y n");
+                    }
+                    Check(mixedEntry.Get("prompt") == mixedEndings, "Ver y copiar no reescribe el texto original");
                     library.SelectedItem = store.Entries[0]; Pump(50);
 
                     window.Size = new Size(1440, 900); Pump(80);
@@ -219,7 +234,7 @@ namespace PromptDesk
                     view.SelectedItem = "Favoritos";
                     Wait(() => library.Items.Count == 2, "Filtro de favoritos");
                     view.SelectedItem = "Recientes";
-                    Wait(() => library.Items.Count == 1, "Filtro de recientes");
+                    Wait(() => library.Items.Count == 2, "Filtro de recientes");
                     view.SelectedItem = "Todos";
                     Wait(() => library.Items.Count == 8, "Filtro de todos");
 

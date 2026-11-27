@@ -196,11 +196,25 @@ public partial class MainWindow:DarkForm {
   Func<string> scope=()=>boxes.ContainsKey("collection")?boxes["collection"].Text:entry.Get("collection");
   foreach(var field in db.Fields){fields.RowStyles.Add(new RowStyle(SizeType.Absolute,field.Id=="prompt"?220:field.Id=="note"||field.Id=="description"?75:42));fields.Controls.Add(new Label{Text=field.Title,Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft},0,row);Control input;
    if(field.Id=="category"||field.Id=="model"||field.Id=="collection")input=ChoiceBox(f,field.Id,scope,entry.Get(field.Id));
-   else{var t=new TextBox{Text=entry.Get(field.Id),Multiline=field.Id=="prompt"||field.Id=="note"||field.Id=="description",ScrollBars=ScrollBars.Vertical};UI.Style(t);input=t;}
+   else{
+    bool multiline=field.Id=="prompt"||field.Id=="note"||field.Id=="description";
+    var t=new TextBox{Multiline=multiline,AcceptsReturn=multiline,ScrollBars=ScrollBars.Vertical};
+    t.Text=multiline?PromptText.ForWindows(entry.Get(field.Id)):entry.Get(field.Id);
+    UI.Style(t);input=t;
+   }
    input.Name=field.Id;input.Dock=DockStyle.Fill;fields.Controls.Add(input,1,row++);boxes[field.Id]=input;
   }
   var collectionBox=boxes["collection"] as ComboBox;collectionBox.SelectedIndexChanged+=(sender,args)=>{var cb=(ComboBox)boxes["category"];string previous=cb.Text;FillChoiceBox(cb,"category",scope(),previous);};
-  var bottom=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=56};bottom.Controls.Add(UI.Button("Guardar",()=>{if(String.IsNullOrWhiteSpace(boxes["name"].Text)){MessageBox.Show("Poné un nombre.");return;}if(boxes.Values.Any(c=>c.Text==NewChoice))return;foreach(var pair in boxes)entry.Set(pair.Key,pair.Value.Text);RegisterChoice("category",scope(),entry.Get("category"));RegisterChoice("model",scope(),entry.Get("model"));f.DialogResult=DialogResult.OK;}));bottom.Controls.Add(UI.Button("Cancelar",()=>f.DialogResult=DialogResult.Cancel));f.Controls.Add(fields);f.Controls.Add(bottom);return f.ShowDialog(this)==DialogResult.OK;
+  var bottom=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=56};bottom.Controls.Add(UI.Button("Guardar",()=>{
+   if(String.IsNullOrWhiteSpace(boxes["name"].Text)){MessageBox.Show("Poné un nombre.");return;}
+   if(boxes.Values.Any(c=>c.Text==NewChoice))return;
+   foreach(var pair in boxes){
+    var box=pair.Value as TextBox;
+    if(box!=null && box.Multiline && box.Text==PromptText.ForWindows(entry.Get(pair.Key)))continue;
+    entry.Set(pair.Key,pair.Value.Text);
+   }
+   RegisterChoice("category",scope(),entry.Get("category"));RegisterChoice("model",scope(),entry.Get("model"));f.DialogResult=DialogResult.OK;
+  }));bottom.Controls.Add(UI.Button("Cancelar",()=>f.DialogResult=DialogResult.Cancel));f.Controls.Add(fields);f.Controls.Add(bottom);return f.ShowDialog(this)==DialogResult.OK;
  }}
  List<string> ChoiceValues(string key,string scope){if(key=="collection")return new List<string>{"Personales","404"};return new[]{""}.Concat(CatalogValues(key,scope).Where(v=>ChoiceEnabled(key,scope,v))).ToList();}
 
@@ -231,7 +245,19 @@ public partial class MainWindow:DarkForm {
   if(e.Variables.Count==0)return true;
   using(var dialog=CreateVariableValuesDialog(e))return dialog.ShowDialog()==DialogResult.OK;
  }
- void Copy(Entry e){if(e==null)return;grid.EndEdit();if(e.Get("prompt").Length==0)throw new Exception("Este prompt está vacío.");if(!FillVariables(e))return;string text=Templates.Render(e);Clipboard.SetDataObject(text,true,5,80);e.LastUsed=DateTime.UtcNow.ToString("o");Changed(null);Save();status.Text="Copiado: "+e.Get("name")+" · "+text.Length+" caracteres";if(tray!=null&&(!Visible||WindowState==FormWindowState.Minimized))tray.ShowBalloonTip(1200,"Prompt copiado",e.Get("name"),ToolTipIcon.Info);}
+ void Copy(Entry e){
+  if(e==null)return;
+  grid.EndEdit();
+  if(e.Get("prompt").Length==0)throw new Exception("Este prompt está vacío.");
+  if(!FillVariables(e))return;
+  string text=PromptText.ForWindows(Templates.Render(e));
+  Clipboard.SetDataObject(text,true,5,80);
+  e.LastUsed=DateTime.UtcNow.ToString("o");
+  Changed(null);Save();
+  status.Text="Copiado: "+e.Get("name")+" · "+text.Length+" caracteres";
+  if(tray!=null&&(!Visible||WindowState==FormWindowState.Minimized))
+   tray.ShowBalloonTip(1200,"Prompt copiado",e.Get("name"),ToolTipIcon.Info);
+ }
  public static bool ParseKey(string s,out uint modifiers,out uint key){modifiers=0;key=0;if(String.IsNullOrWhiteSpace(s))return false;var parts=s.Split('+').Select(p=>p.Trim()).ToArray();foreach(var p in parts.Take(parts.Length-1)){if(p.Equals("Ctrl",StringComparison.OrdinalIgnoreCase))modifiers|=2;else if(p.Equals("Alt",StringComparison.OrdinalIgnoreCase))modifiers|=1;else if(p.Equals("Shift",StringComparison.OrdinalIgnoreCase))modifiers|=4;else return false;}string last=parts.Last();if(last.StartsWith("NumPad",StringComparison.OrdinalIgnoreCase)&&last.Length==7&&Char.IsDigit(last[6]))key=(uint)(96+last[6]-'0');else return false;return modifiers!=0;}
  void Shortcut(Entry e){if(e==null)return;string value=UI.Ask(this,"Atajo global · ejemplo Ctrl+Alt+NumPad1 (vacío = quitar)",e.Hotkey);if(value==null)return;value=value.Trim();uint mods,key;if(value.Length>0){if(!ParseKey(value,out mods,out key))throw new Exception("Usá Ctrl+Alt+NumPad0 a NumPad9; también se admiten Alt o Shift.");foreach(var other in db.Entries.Where(a=>a.Id!=e.Id)){uint om,ok;if(ParseKey(other.Hotkey,out om,out ok)&&om==mods&&ok==key)throw new Exception("Ese atajo está asignado a "+other.Get("name"));}foreach(var pair in hotkeys.Where(p=>p.Value.Id==e.Id).ToList()){UnregisterHotKey(Handle,pair.Key);hotkeys.Remove(pair.Key);}if(!RegisterHotKey(Handle,999,mods|0x4000,key)){RegisterKeys();throw new Exception("Windows u otra aplicación ya usa ese atajo. Elegí otro.");}UnregisterHotKey(Handle,999);}e.Hotkey=value;Changed();Save();RegisterKeys();RefreshRows();}
  void RegisterKeys(bool showWarnings=true){if(testing)return;foreach(int id in hotkeys.Keys)UnregisterHotKey(Handle,id);hotkeys.Clear();var errors=new List<string>();int next=1;foreach(var e in db.Entries){uint mods,key;if(e.Hotkey.Length==0)continue;if(!ParseKey(e.Hotkey,out mods,out key)||!RegisterHotKey(Handle,next,mods|0x4000,key)){errors.Add(e.Get("name")+" · "+e.Hotkey);continue;}hotkeys[next++]=e;}if(!showWarnings){ReportCloudHotkeyErrors(errors);return;}if(errors.Count>0)MessageBox.Show(this,"No se pudieron activar estos atajos (inválidos u ocupados):\n"+String.Join("\n",errors.ToArray()),"Atajos no disponibles");}

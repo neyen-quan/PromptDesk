@@ -71,7 +71,7 @@ public partial class MainWindow {
         value.Height = value.Font.Height * 4 + 8;
         // Windows multiline controls display CRLF. Keep the stored text verbatim on untouched reads.
         string lastValue = variable.Value;
-        string displayedLastValue = DisplayVariableValue(lastValue);
+        string displayedLastValue = PromptText.ForWindows(lastValue);
         if (variable.Options.Count == 0) {
             value.Text = displayedLastValue;
             fields.Controls.Add(value);
@@ -92,7 +92,7 @@ public partial class MainWindow {
             bool custom = choices.SelectedIndex == customIndex;
             if (!value.ReadOnly && !custom) customText = value.Text;
             value.ReadOnly = !custom;
-            value.Text = custom ? customText : DisplayVariableValue(variable.Options[choices.SelectedIndex].Value);
+            value.Text = custom ? customText : PromptText.ForWindows(variable.Options[choices.SelectedIndex].Value);
             value.Select(0, 0);
         };
         fields.Controls.Add(choices);
@@ -107,9 +107,5 @@ public partial class MainWindow {
         };
     }
 
-    static string DisplayVariableValue(string text)
-    {
-        return text.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
-    }
 }
 }

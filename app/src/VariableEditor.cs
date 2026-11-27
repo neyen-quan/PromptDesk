@@ -164,7 +164,7 @@ namespace PromptDesk
                 updating = true;
                 name.Enabled = value.Enabled = remove.Enabled = i >= 0;
                 name.Text = i < 0 ? "" : drafts[i].Label;
-                value.Text = i < 0 ? "" : drafts[i].Value;
+                value.Text = i < 0 ? "" : PromptText.ForWindows(drafts[i].Value);
                 updating = false;
             };
             list.SelectedIndexChanged += delegate { select(); };

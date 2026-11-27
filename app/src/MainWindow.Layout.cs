@@ -347,7 +347,7 @@ namespace PromptDesk
         {
             busy = true;
             bool hasEntry = selected != null;
-            editor.Text = hasEntry ? selected.Get("prompt") : ""; editor.Enabled = hasEntry;
+            editor.Text = hasEntry ? PromptText.ForWindows(selected.Get("prompt")) : ""; editor.Enabled = hasEntry;
             entryTitle.Text = hasEntry ? selected.Get("name") : ""; entryTitle.Enabled = hasEntry;
             entryTitle.Visible = editor.Visible = hasEntry;
             editorMetadata.Visible = hasEntry && !tableMode;

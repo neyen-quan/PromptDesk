@@ -77,9 +77,8 @@ foreach ($base in $publishedBases) {
 $notes=@"
 PromptDesk $version
 
-- Cada marcador admite opciones con nombre y texto de reemplazo multilínea.
-- Al copiar, elegí una opción guardada o escribí un valor libre.
-- El editor ajusta la altura de las filas al abrirse.
+- El editor muestra los párrafos y las líneas en blanco de los prompts importados.
+- Copiar prompt conserva los saltos de línea en Windows, incluso dentro de un reemplazo de variable.
 - Las nuevas compilaciones se instalan directamente en la PC.
 - Parche acumulativo comprobado desde las versiones publicadas 1.1.3 y posteriores.
 - El catálogo y los respaldos locales se conservan. No se incluyen prompts personales en esta descarga.
