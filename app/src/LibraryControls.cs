@@ -11,6 +11,7 @@ namespace PromptDesk
         readonly Font titleFont = new Font("Segoe UI", 10.5f, FontStyle.Bold);
         readonly Font previewFont = new Font("Segoe UI", 9.5f);
         readonly Font metaFont = new Font("Segoe UI", 8);
+        internal Store Catalog { get; set; }
 
         public LibraryList()
         {
@@ -29,14 +30,28 @@ namespace PromptDesk
             if (e.Index < 0 || e.Index >= Items.Count) return;
             var entry = (Entry)Items[e.Index];
             bool active = (e.State & DrawItemState.Selected) != 0;
+            string model = entry.Get("model");
+            Color accent = ModelPalette.For(Catalog, model);
+            Color fillColor = active ? UI.Selected : Color.FromArgb(25, 36, 49);
+            Color lineColor = active ? Color.FromArgb(83, 160, 184) : UI.Line;
+            Color metadataColor = active ? UI.Accent : Color.FromArgb(150, 172, 194);
+            if (!accent.IsEmpty)
+            {
+                metadataColor = ModelPalette.Ink(accent);
+                fillColor = ModelPalette.Surface(accent, active);
+                lineColor = active ? metadataColor : ModelPalette.Blend(fillColor, metadataColor, 26);
+            }
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var bounds = new Rectangle(e.Bounds.Left + 2, e.Bounds.Top + 3, Math.Max(8, e.Bounds.Width - 5), e.Bounds.Height - 7);
             using (var path = Glass.Round(bounds, 10))
-            using (var fill = new SolidBrush(active ? UI.Selected : Color.FromArgb(25, 36, 49)))
-            using (var line = new Pen(active ? Color.FromArgb(83, 160, 184) : UI.Line))
+            using (var fill = new SolidBrush(fillColor))
+            using (var line = new Pen(lineColor, active ? 2 : 1))
             {
                 e.Graphics.FillPath(fill, path); e.Graphics.DrawPath(line, path);
             }
+            if (!accent.IsEmpty)
+                using (var stripe = new Pen(metadataColor, 3) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    e.Graphics.DrawLine(stripe, bounds.Left + 4, bounds.Top + 9, bounds.Left + 4, bounds.Bottom - 9);
             string name = String.IsNullOrWhiteSpace(entry.Get("name")) ? "Sin título" : entry.Get("name");
             var title = new Rectangle(bounds.Left + 13, bounds.Top + (entry.Archived ? 3 : 11), Math.Max(1, bounds.Width - 43), 22);
             TextRenderer.DrawText(e.Graphics, Fit(name, titleFont, title.Width), titleFont, title, UI.Ink, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
@@ -44,10 +59,11 @@ namespace PromptDesk
             if (entry.Archived)
             {
                 string location = String.Join("  /  ", new[] { entry.Get("collection"), entry.Get("category") }.Where(s => s.Length != 0));
+                if (!String.IsNullOrWhiteSpace(model)) location += "  ·  " + model;
                 TextRenderer.DrawText(e.Graphics, location, metaFont,
                     new Rectangle(bounds.Left + 13, bounds.Top + 25, Math.Max(1, bounds.Width - 26), 19),
-                    UI.Muted, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-                if ((e.State & DrawItemState.Focus) != 0) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(bounds, -3, -3), UI.Accent, UI.Selected);
+                    metadataColor, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                if ((e.State & DrawItemState.Focus) != 0) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(bounds, -5, -3), lineColor, fillColor);
                 return;
             }
             string preview = entry.Get("description");
@@ -57,13 +73,13 @@ namespace PromptDesk
             if (preview.Length > 250) preview = preview.Substring(0, 250);
             TextRenderer.DrawText(e.Graphics, Fit(preview, previewFont, bounds.Width - 26), previewFont,
                 new Rectangle(bounds.Left + 13, bounds.Top + 37, Math.Max(1, bounds.Width - 26), 24),
-                UI.Muted, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            string metadata = String.Join("  ·  ", new[] { entry.Get("category"), entry.Get("model") }.Where(s => !String.IsNullOrWhiteSpace(s)).ToArray());
+                Color.FromArgb(181, 195, 208), TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            string metadata = String.Join("  ·  ", new[] { model, entry.Get("category") }.Where(s => !String.IsNullOrWhiteSpace(s)).ToArray());
             if (metadata.Length == 0) metadata = "Sin categoría · " + entry.Get("collection");
             TextRenderer.DrawText(e.Graphics, Fit(metadata, metaFont, bounds.Width - 26), metaFont,
                 new Rectangle(bounds.Left + 13, bounds.Top + 72, Math.Max(1, bounds.Width - 26), 18),
-                active ? UI.Accent : Color.FromArgb(126, 157, 181), TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            if ((e.State & DrawItemState.Focus) != 0) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(bounds, -3, -3), UI.Accent, UI.Selected);
+                metadataColor, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            if ((e.State & DrawItemState.Focus) != 0) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(bounds, -5, -3), lineColor, fillColor);
         }
 
         static string Fit(string text, Font font, int width)

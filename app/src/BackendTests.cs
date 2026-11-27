@@ -35,12 +35,36 @@ namespace PromptDesk
         public static void Run(Action<bool, string> check, string folder)
         {
             CheckStorage(check, Path.Combine(folder, "storage"));
+            CheckModelColors(check, Path.Combine(folder, "model-colors"));
             CheckFolders(check, Path.Combine(folder, "subfolders"));
             CheckFolderManagement(check, Path.Combine(folder, "category-manager"));
             CheckVariableOptions(check, Path.Combine(folder, "variable-options"));
             CheckHistory(check, Path.Combine(folder, "history"));
             CheckSearch(check);
             CheckTemplates(check);
+        }
+
+        static void CheckModelColors(Action<bool, string> check, string folder)
+        {
+            var db = EmptyStore(folder);
+            db.Models.Add("Modelo & variante");
+            check(db.ModelColors.Count == 0 && db.Document().Root.Element("modelColors") == null,
+                "Las bibliotecas anteriores abren con los colores automáticos");
+            var history = new UndoHistory(db);
+            db.ModelColors[db.Models[0]] = "#aAbB00";
+            history.Record(db, "");
+            check(history.Undo(db) && db.ModelColors.Count == 0 && history.Redo(db) &&
+                db.ModelColors[db.Models[0]] == "#AABB00", "Deshacer y rehacer recuperan el color del modelo");
+            string backup = Path.Combine(folder, "backup.xml");
+            db.Export(backup);
+            db.ModelColors.Clear();
+            db.Load(backup);
+            check(db.ModelColors["Modelo & variante"] == "#AABB00", "Restaurar XML conserva los colores personalizados");
+            var invalid = db.Document();
+            var color = invalid.Root.Element("modelColors").Element("color");
+            color.SetAttributeValue("rgb", "#ABC");
+            check(Fails(() => db.ReadDocument(invalid)) && db.ModelColors["Modelo & variante"] == "#AABB00",
+                "Un color inválido no reemplaza el catálogo activo");
         }
 
         static void CheckFolders(Action<bool, string> check, string folder)

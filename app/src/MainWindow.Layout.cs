@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -218,7 +219,7 @@ namespace PromptDesk
             resultCount = LabelAt("0 prompts", 4, 37, 260, 24, 9, UI.Muted);
             resultCount.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; heading.Controls.Add(resultCount);
             var host = libraryHost = new Panel { Dock = DockStyle.Fill, BackColor = UI.Panel };
-            library = new LibraryList { Dock = DockStyle.Fill, AccessibleName = "Biblioteca de prompts" };
+            library = new LibraryList { Catalog = db, Dock = DockStyle.Fill, AccessibleName = "Biblioteca de prompts" };
             grid = new DataGridView
             {
                 Dock = DockStyle.Fill, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
@@ -407,6 +408,52 @@ namespace PromptDesk
         {
             foreach (var pair in navigation) { pair.Value.Active = view.Text == pair.Key; pair.Value.Invalidate(); }
             listModeButton.Active = !tableMode; tableModeButton.Active = tableMode; listModeButton.Invalidate(); tableModeButton.Invalidate();
+        }
+
+        void PaintLibraryCell(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            string key = grid.Columns[e.ColumnIndex].Name;
+            bool choice = key == "category" || key == "model" || key == "collection";
+            if (key != "copy" && key != "favorite" && !choice) return;
+            string text = Convert.ToString(e.FormattedValue);
+            bool active = grid.Rows[e.RowIndex].Selected;
+            var bounds = e.CellBounds;
+            Color background = active ? UI.Selected : e.RowIndex % 2 == 0 ? UI.Input : Color.FromArgb(15, 26, 39);
+            Color accent = key == "model" ? ModelPalette.For(db, text) : Color.Empty;
+            if (!accent.IsEmpty) background = ModelPalette.Surface(accent, active);
+            using (var fill = new SolidBrush(background)) e.Graphics.FillRectangle(fill, bounds);
+            using (var pen = new Pen(UI.Line)) e.Graphics.DrawLine(pen, bounds.Left, bounds.Bottom - 1, bounds.Right, bounds.Bottom - 1);
+            if (key == "copy")
+            {
+                var rect = new Rectangle(bounds.X + 6, bounds.Y + 7, bounds.Width - 12, bounds.Height - 14);
+                using (var path = Glass.Round(rect, 6))
+                using (var fill = new SolidBrush(UI.Selected))
+                using (var pen = new Pen(Color.FromArgb(43, 103, 132)))
+                {
+                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                    e.Graphics.FillPath(fill, path); e.Graphics.DrawPath(pen, path);
+                }
+                TextRenderer.DrawText(e.Graphics, "Copiar", grid.Font, rect, UI.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+            else if (choice)
+            {
+                var rect = new Rectangle(bounds.X + 8, bounds.Y, bounds.Width - 31, bounds.Height);
+                Color ink = UI.Ink;
+                if (!accent.IsEmpty)
+                {
+                    ink = ModelPalette.Ink(accent);
+                    using (var stripe = new SolidBrush(ink))
+                        e.Graphics.FillRectangle(stripe, bounds.Left + 2, bounds.Top + 5, 3, Math.Max(1, bounds.Height - 10));
+                }
+                TextRenderer.DrawText(e.Graphics, text, grid.Font, rect, ink, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                int x = bounds.Right - 16, y = bounds.Top + bounds.Height / 2;
+                using (var pen = new Pen(UI.Muted, 1.3f))
+                    e.Graphics.DrawLines(pen, new[] { new Point(x - 4, y - 2), new Point(x, y + 2), new Point(x + 4, y - 2) });
+            }
+            else
+                TextRenderer.DrawText(e.Graphics, text, grid.Font, bounds, UI.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            e.Handled = true;
         }
 
         void ToggleFavorite()

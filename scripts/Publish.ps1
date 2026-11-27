@@ -77,8 +77,8 @@ foreach ($base in $publishedBases) {
 $notes=@"
 PromptDesk $version
 
-- Las categorías admiten subcarpetas anidadas en cada colección.
-- Elegí una subcarpeta para crear un prompt allí o cambiale la categoría desde su ficha.
+- La biblioteca y la columna Modelo de la tabla muestran el color de cada modelo.
+- Elegí tus colores desde Organizar > Gestionar modelos.
 - Las nuevas compilaciones se instalan directamente en la PC.
 - Parche acumulativo comprobado desde las versiones publicadas 1.1.3 y posteriores.
 - El catálogo y los respaldos locales se conservan. No se incluyen prompts personales en esta descarga.

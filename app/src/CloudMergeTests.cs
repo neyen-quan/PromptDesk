@@ -81,6 +81,23 @@ namespace PromptDesk
             check(CloudCatalog.Equivalent(oldPc.Xml, joined.Xml), "PC sin cambios recibe altas remotas sin interpretarlas como borrados locales");
 
             string baseline = Document(Prompt("a", "Original A"), Prompt("b", "Original B"));
+            string colorBase = Change(baseline, c => { c.Models.Add("A"); c.Entries[0].Set("model", "B"); });
+            string colorA = Change(colorBase, c => c.ModelColors["A"] = "#112233");
+            string colorB = Change(colorBase, c => c.ModelColors["B"] = "#998877");
+            var independentColors = CloudMerge.Merge(colorBase, colorA, colorB);
+            var colors = CloudCatalog.Read(independentColors.Xml).ModelColors;
+            check(colors["A"] == "#112233" && colors["B"] == "#998877" && independentColors.Conflicts.Count == 0,
+                "Se combinan colores de modelos distintos, incluidos modelos presentes solo en prompts");
+            string recolored = Change(colorA, c => c.ModelColors["A"] = "#123456");
+            var conflictColor = CloudMerge.Merge(colorA, colorBase, recolored);
+            check(CloudCatalog.Read(conflictColor.Xml).ModelColors["A"] == "#123456" && conflictColor.Conflicts.Count == 1,
+                "Se informa un cambio simultáneo de color y el retorno a automático");
+            check(CloudCatalog.Equivalent(CloudMerge.Merge(colorA, colorBase, colorA).Xml, colorBase) &&
+                CloudCatalog.Equivalent(CloudMerge.Merge(null, colorA, colorB).Xml, independentColors.Xml),
+                "Quitar un color se propaga y la primera sincronización reúne los ajustes de ambos equipos");
+            check(Rejects(() => CloudCatalog.Validate(colorA.Replace("#112233", "inválido"))) &&
+                Rejects(() => CloudCatalog.Validate(colorA.Replace("</modelColors>", "<color model='A' rgb='#112233'/></modelColors>"))),
+                "La nube rechaza colores mal formados y ajustes repetidos para el mismo modelo");
             string local = Change(baseline, c => c.Entries.Single(e => e.Id == "a").Set("prompt", "Local A"));
             string remote = Change(baseline, c => c.Entries.Single(e => e.Id == "b").Set("prompt", "Remoto B"));
             var separate = CloudMerge.Merge(baseline, local, remote);

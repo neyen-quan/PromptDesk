@@ -57,7 +57,7 @@ namespace PromptDesk
             Check(condition(), failure);
         }
 
-        static void Capture(MainWindow window, string folder, string name)
+        static void Capture(Form window, string folder, string name)
         {
             Pump(80);
             using (var bitmap = new Bitmap(window.Width, window.Height))
@@ -226,6 +226,111 @@ namespace PromptDesk
             Call(window, "ReportCloudHotkeyErrors", (object)errors);
             Check(notices.Count == 1, "Un nuevo fallo del atajo después de resolverse queda oculto");
             notices.Clear();
+        }
+
+        static Color CardFill(LibraryList list, Entry item, bool selected)
+        {
+            using (var bitmap = new Bitmap(list.ClientSize.Width, list.ItemHeight))
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                var args = new DrawItemEventArgs(g, list.Font, new Rectangle(Point.Empty, bitmap.Size),
+                    list.Items.IndexOf(item), selected ? DrawItemState.Selected : DrawItemState.None);
+                typeof(LibraryList).GetMethod("OnDrawItem", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(list, new object[] { args });
+                return bitmap.GetPixel(bitmap.Width - 32, bitmap.Height / 2);
+            }
+        }
+
+        static void EditModelColor(MainWindow window, string model, string control, string outputFolder = null)
+        {
+            Exception error = null;
+            window.BeginInvoke((Action)delegate {
+                var dialog = Application.OpenForms.Cast<Form>().Single(f => f.Text == "Gestionar modelos");
+                try
+                {
+                    var choices = (CheckedListBox)dialog.Controls.Find("modelChoices", true).Single();
+                    choices.SelectedItem = model;
+                    var button = (IButtonControl)dialog.Controls.Find(control, true).Single();
+                    button.PerformClick();
+                    if (outputFolder != null) Capture(dialog, outputFolder, "elegir-color-del-modelo");
+                }
+                catch (Exception ex) { error = ex; }
+                finally { dialog.Close(); }
+            });
+            Call(window, "ManageChoices", "model");
+            if (error != null) throw error;
+        }
+
+        static void ModelColorCards(string folder, string outputFolder)
+        {
+            var store = new Store(folder);
+            store.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed.xml"));
+            string[] models = { "Banana Pro 2.1", "Para GPT Personal", "Wan 3.0" };
+            string[] names = { "Cambiar el fondo", "Desarrollar una idea", "Movimiento de cámara" };
+            string[] prompts = { "Iluminá el objeto desde la izquierda.", "Proponé tres variantes de esta idea.", "Hacé un recorrido de cámara suave." };
+            for (int i = 0; i < models.Length; i++)
+            {
+                var entry = new Entry();
+                entry.Set("collection", "Personales"); entry.Set("category", "Estudio");
+                entry.Set("name", names[i]); entry.Set("model", models[i]); entry.Set("prompt", prompts[i]);
+                store.Entries.Add(entry);
+            }
+            store.Save();
+            using (var window = new MainWindow(store, true))
+            {
+                window.Show(); window.Size = new Size(1200, 760); Pump(70);
+                var list = Field<LibraryList>(window, "library");
+                var photo = store.Entries[0]; var chat = store.Entries[1]; var video = store.Entries[2];
+                list.SelectedItem = photo;
+                var gold = CardFill(list, photo, false); var blue = CardFill(list, chat, false);
+                var purple = CardFill(list, video, false);
+                Check(gold != blue && blue != purple && gold != purple, "La biblioteca distingue los tres modelos por el fondo de su tarjeta");
+                Check(CardFill(list, photo, true) != gold && CardFill(list, photo, true) != CardFill(list, chat, true),
+                    "Seleccionar una tarjeta conserva el color del modelo y distingue la selección");
+                Capture(window, outputFolder, "colores-por-modelo");
+                Field<GlassButton>(window, "tableModeButton").PerformClick(); Pump(60);
+                var grid = Field<DataGridView>(window, "grid");
+                int column = grid.Columns["model"].Index;
+                grid.FirstDisplayedScrollingColumnIndex = column; Pump(60);
+                using (var bitmap = new Bitmap(grid.Width, grid.Height))
+                {
+                    grid.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+                    foreach (DataGridViewRow row in grid.Rows)
+                    {
+                        var cell = grid.GetCellDisplayRectangle(column, row.Index, false);
+                        var entry = (Entry)row.Tag;
+                        var tint = ModelPalette.Surface(ModelPalette.For(store, entry.Get("model")), row.Selected);
+                        Check(cell.Width > 32 && bitmap.GetPixel(cell.Right - 26, cell.Top + 6).ToArgb() == tint.ToArgb(),
+                            "La celda Modelo de la tabla usa el color asignado a «" + entry.Get("model") + "»");
+                    }
+                }
+                Field<GlassButton>(window, "listModeButton").PerformClick(); Pump(60);
+                Check(ModelPalette.Automatic("Seedream 5.0 Pro") == ModelPalette.Automatic("Seedance") &&
+                    ModelPalette.Automatic("Seedance") == ModelPalette.Automatic(models[0]) &&
+                    ModelPalette.Automatic("One 3.0") == ModelPalette.Automatic(models[2]) &&
+                    ModelPalette.Automatic("").IsEmpty, "Las variantes de nombre mantienen los colores previstos");
+                Choose(Field<ComboBox>(window, "entryModel"), models[2]);
+                Check(CardFill(list, photo, false) == purple, "Cambiar el modelo de un prompt actualiza su tarjeta");
+                EditModelColor(window, models[2], "modelColorAzul", outputFolder);
+                Check(CardFill(list, video, false) == CardFill(list, photo, false) &&
+                    CardFill(list, video, false) != purple && store.ModelColors.ContainsKey(models[2]),
+                    "Asignar un color desde el gestor cambia todas las tarjetas del modelo");
+                EditModelColor(window, models[2], "modelColorAuto");
+                Check(!store.ModelColors.ContainsKey(models[2]) && CardFill(list, video, false) == purple,
+                    "Automático recupera el color original del modelo");
+                const string renamed = "Mi modelo de movimiento";
+                Call(window, "RenameChoice", "model", "", models[2], renamed);
+                Check(video.Get("model") == renamed && CardFill(list, video, false) == purple,
+                    "Renombrar un modelo conserva su color en la biblioteca");
+                Call(window, "RemoveChoice", "model", renamed, null);
+                Check(!store.ModelColors.ContainsKey(renamed) && video.Get("model") == "",
+                    "Eliminar un modelo quita su asignación de color");
+                Call(window, "UndoChange", false);
+                var recovered = store.Entries.Single(e => e.Id == video.Id);
+                Check(recovered.Get("model") == renamed && CardFill(list, recovered, false) == purple,
+                    "Deshacer la eliminación recupera el modelo y su color");
+                window.Close();
+            }
         }
 
         static void FolderNavigation(string folder, string outputFolder)
@@ -597,6 +702,7 @@ namespace PromptDesk
 
                 ArchiveNavigation(Path.Combine(temp, "archivados"), outputFolder);
                 FolderNavigation(Path.Combine(temp, "carpetas"), outputFolder);
+                ModelColorCards(Path.Combine(temp, "colores"), outputFolder);
                 var empty = new Store(Path.Combine(temp, "empty"));
                 empty.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed.xml"));
                 using (var window = new MainWindow(empty, true))

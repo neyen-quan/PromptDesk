@@ -36,6 +36,7 @@ herramientas menos frecuentes están agrupadas en menús.
 - Elegí una categoría y usá **+ → Nueva subcarpeta** para crear carpetas dentro de ella. Podés anidarlas, crear prompts en la carpeta elegida o mover uno desde el desplegable **Categoría** de su ficha.
 - Archivar desde **Más** y consultar el histórico en **Archivados**. Restaurar devuelve el prompt a su colección y categoría con sus variables y favorito. El atajo global queda en pausa durante el archivo.
 - Usar **Lista** para recorrer contenido y **Tabla** para editar columnas personalizadas.
+- El modelo determina el color de la tarjeta y de su celda en la tabla. Azul identifica GPT Personal, amarillo identifica Banana, Seedream y Seedance, y violeta identifica Wan. Desde **Organizar → Gestionar modelos** podés elegir otro color para cualquier modelo.
 - Guardado automático, deshacer/rehacer, variables al copiar y atajos globales.
 - En **Variables**, seleccioná el marcador y abrí **Editar opciones…**. Guardá un nombre y el texto de reemplazo de cada alternativa. Al copiar, **Libre** es el primer botón y permite escribir. Los demás botones usan los textos guardados. Arrastralos para cambiar su orden. Cada variable recuerda el orden y la última opción que confirmaste al copiar.
 - Mantener categorías, modelos, orden y campos existentes sin cambiar el formato del catálogo.
@@ -57,8 +58,8 @@ También admite uso portable desde la carpeta extraída.
 
 Las actualizaciones se aplican directamente en la PC. Cerrá PromptDesk para
 instalar la compilación probada en su carpeta de ejecución. La biblioteca y
-los respaldos se guardan por separado. Para sincronizar las subcarpetas entre
-la PC y la notebook, usá 1.3.5 o posterior en ambos equipos.
+los respaldos se guardan por separado. Para sincronizar tus colores de modelo
+entre la PC y la notebook, usá 1.3.6 o posterior en ambos equipos.
 
 ## Datos personales
 

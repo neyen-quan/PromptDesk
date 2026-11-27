@@ -130,6 +130,7 @@ namespace PromptDesk
         public List<string> Categories = new List<string>();
         public List<string> Subfolders = new List<string>();
         public List<string> Models = new List<string>();
+        public Dictionary<string, string> ModelColors = new Dictionary<string, string>(StringComparer.Ordinal);
         public List<string> ColumnOrder = new List<string>();
         public List<string> CategoryOrder = new List<string>();
         public List<string> DisabledChoices = new List<string>();
@@ -158,6 +159,46 @@ namespace PromptDesk
             XElement element = root.Element(container);
             return element == null ? new List<string>()
                 : element.Elements(item).Select(value => value.Value).Distinct().ToList();
+        }
+
+        internal static Dictionary<string, string> ReadModelColors(XElement root)
+        {
+            var colors = new Dictionary<string, string>(StringComparer.Ordinal);
+            XElement section = root.Element("modelColors");
+            if (section == null) return colors;
+            if (root.Elements("modelColors").Skip(1).Any() || section.HasAttributes ||
+                section.Nodes().OfType<XText>().Any(t => !String.IsNullOrWhiteSpace(t.Value)))
+                throw new InvalidDataException("La sección de colores de modelos no es válida.");
+            foreach (XElement item in section.Elements())
+            {
+                string model = (string)item.Attribute("model");
+                string rgb = (string)item.Attribute("rgb");
+                if (item.Name != "color" || item.HasElements || !String.IsNullOrWhiteSpace(item.Value) ||
+                    item.Attributes().Count() != 2 || String.IsNullOrWhiteSpace(model) ||
+                    colors.ContainsKey(model) || !ValidRgb(rgb))
+                    throw new InvalidDataException("El catálogo contiene un color de modelo inválido o repetido.");
+                colors.Add(model, rgb.ToUpperInvariant());
+            }
+            return colors;
+        }
+
+        static bool ValidRgb(string rgb)
+        {
+            return rgb != null && rgb.Length == 7 && rgb[0] == '#' && rgb.Skip(1).All(Uri.IsHexDigit);
+        }
+
+        internal static XElement ModelColorsElement(Dictionary<string, string> colors)
+        {
+            if (colors.Count == 0) return null;
+            var section = new XElement("modelColors");
+            foreach (var pair in colors.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                if (String.IsNullOrWhiteSpace(pair.Key) || !ValidRgb(pair.Value))
+                    throw new InvalidDataException("El modelo necesita un nombre y un color RGB válido.");
+                section.Add(new XElement("color", new XAttribute("model", pair.Key),
+                    new XAttribute("rgb", pair.Value.ToUpperInvariant())));
+            }
+            return section;
         }
 
         public void ReadDocument(XDocument document)
@@ -189,6 +230,7 @@ namespace PromptDesk
             var subfolders = ReadList(root, "subfolders", "folder");
             CategoryFolders.Validate(subfolders);
             var models = ReadList(root, "models", "model");
+            var colors = ReadModelColors(root);
             var columnOrder = ReadList(root, "columnOrder", "column");
             var categoryOrder = ReadList(root, "categoryOrder", "category");
             var disabledChoices = ReadList(root, "disabledChoices", "choice");
@@ -197,6 +239,7 @@ namespace PromptDesk
             Categories = categories;
             Subfolders = subfolders;
             Models = models;
+            ModelColors = colors;
             ColumnOrder = columnOrder;
             CategoryOrder = categoryOrder;
             DisabledChoices = disabledChoices;
@@ -216,6 +259,7 @@ namespace PromptDesk
                 new XElement("categories", Categories.Select(value => new XElement("category", value))),
                 Subfolders.Count == 0 ? null : new XElement("subfolders", Subfolders.Select(value => new XElement("folder", value))),
                 new XElement("models", Models.Select(value => new XElement("model", value))),
+                ModelColorsElement(ModelColors),
                 new XElement("columnOrder", ColumnOrder.Select(value => new XElement("column", value))),
                 new XElement("categoryOrder", CategoryOrder.Select(value => new XElement("category", value))),
                 new XElement("disabledChoices", DisabledChoices.Select(value => new XElement("choice", value))),

@@ -38,6 +38,7 @@ namespace PromptDesk
             internal List<Field> Fields = new List<Field>();
             internal List<Entry> Entries = new List<Entry>();
             internal List<string> Categories = new List<string>(), Models = new List<string>();
+            internal Dictionary<string, string> ModelColors = new Dictionary<string, string>(StringComparer.Ordinal);
             internal List<string> Subfolders = new List<string>();
             internal List<string> ColumnOrder = new List<string>(), CategoryOrder = new List<string>();
             internal List<string> DisabledChoices = new List<string>();
@@ -50,6 +51,7 @@ namespace PromptDesk
                     List("categories", "category", Categories, false),
                     Subfolders.Count == 0 ? null : List("subfolders", "folder", Subfolders, false),
                     List("models", "model", Models, false),
+                    Store.ModelColorsElement(ModelColors),
                     List("columnOrder", "column", ColumnOrder, true),
                     List("categoryOrder", "category", CategoryOrder, true),
                     List("disabledChoices", "choice", DisabledChoices, false),
@@ -89,7 +91,7 @@ namespace PromptDesk
             if (document.DocumentType != null || root == null || root.Name != "promptdesk" || (string)root.Attribute("version") != "1")
                 throw Invalid("El catálogo no es compatible con PromptDesk.");
             Attributes(root, "version");
-            Children(root, "columns", "categories", "subfolders", "models", "columnOrder", "categoryOrder", "disabledChoices", "records");
+            Children(root, "columns", "categories", "subfolders", "models", "modelColors", "columnOrder", "categoryOrder", "disabledChoices", "records");
             foreach (string name in new[] { "columns", "categories", "subfolders", "models", "columnOrder", "categoryOrder", "disabledChoices", "records" })
                 if (root.Elements(name).Skip(1).Any()) throw Invalid("El catálogo contiene secciones repetidas.");
             if (root.Element("columns") == null || root.Element("records") == null)
@@ -145,6 +147,7 @@ namespace PromptDesk
             result.Subfolders = ReadList(root, "subfolders", "folder");
             CategoryFolders.Validate(result.Subfolders);
             result.Models = ReadList(root, "models", "model");
+            result.ModelColors = Store.ReadModelColors(root);
             result.ColumnOrder = ReadList(root, "columnOrder", "column");
             result.CategoryOrder = ReadList(root, "categoryOrder", "category");
             result.DisabledChoices = ReadList(root, "disabledChoices", "choice");
@@ -305,6 +308,15 @@ namespace PromptDesk
             merged.Subfolders = MergeSet(List(baseline, c => c.Subfolders), local.Subfolders, remote.Subfolders, baseline == null);
             PreserveFolderParents(merged, local.Subfolders.Concat(remote.Subfolders));
             merged.Models = MergeSet(List(baseline, c => c.Models), local.Models, remote.Models, baseline == null);
+            var previousColors = baseline == null ? new Dictionary<string, string>() : baseline.ModelColors;
+            var existingModels = new HashSet<string>(merged.Models.Concat(merged.Entries.Select(e => e.Get("model"))), StringComparer.Ordinal);
+            foreach (string model in Keys(previousColors, local.ModelColors, remote.ModelColors).Where(existingModels.Contains))
+            {
+                bool conflict = false;
+                string color = Pick(Get(previousColors, model), Get(local.ModelColors, model), Get(remote.ModelColors, model), ref conflict);
+                if (color != null) merged.ModelColors.Add(model, color);
+                if (conflict) result.Conflicts.Add("Los dos equipos cambiaron el color de «" + model + "». Se conservó el ajuste de la cuenta.");
+            }
             merged.DisabledChoices = MergeSet(List(baseline, c => c.DisabledChoices), local.DisabledChoices, remote.DisabledChoices, baseline == null);
             var columnMembers = MergeSet(List(baseline, c => c.ColumnOrder), local.ColumnOrder, remote.ColumnOrder, baseline == null);
             var allFieldIds = new HashSet<string>(local.Fields.Concat(remote.Fields).Concat(baseline == null ? new List<Field>() : baseline.Fields).Select(f => f.Id));

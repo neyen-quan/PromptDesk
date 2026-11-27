@@ -309,6 +309,7 @@ namespace PromptDesk
                     candidate.Save();
                     db.Fields = candidate.Fields; db.Entries = candidate.Entries;
                     db.Categories = candidate.Categories; db.Subfolders = candidate.Subfolders; db.Models = candidate.Models;
+                    db.ModelColors = candidate.ModelColors;
                     db.ColumnOrder = candidate.ColumnOrder; db.CategoryOrder = candidate.CategoryOrder;
                     db.DisabledChoices = candidate.DisabledChoices;
                 }

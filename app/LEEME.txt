@@ -12,6 +12,9 @@ Para crear una subcarpeta, seleccioná su carpeta madre y elegí Nueva subcarpet
 en el menú + de Categorías. Nuevo prompt usa la carpeta seleccionada. Para mover
 un prompt existente, elegí la ruta de destino en Categoría dentro de su ficha.
 El editor de la derecha permite trabajar con el texto y sus datos.
+Las tarjetas toman su color del modelo. Para cambiarlo, abrí Organizar >
+Gestionar modelos, seleccioná el modelo y elegí un color. Automático recupera
+el color inicial para ese modelo.
 La búsqueda admite varias palabras y no distingue tildes ni mayúsculas.
 Todos, Favoritos y Recientes permiten encontrar tus plantillas más rápido.
 En Más > Archivar prompt podés guardar una plantilla para consultar más adelante.
