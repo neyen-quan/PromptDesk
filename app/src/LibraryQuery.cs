@@ -14,7 +14,9 @@ namespace PromptDesk
         {
             string[] terms = (query ?? "").Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
             CompareInfo comparison = CultureInfo.CurrentCulture.CompareInfo;
+            bool archived = view == "Archivados";
             IEnumerable<Entry> matches = entries.Where(entry =>
+                entry.Archived == archived &&
                 (String.IsNullOrEmpty(collection) || collection == "Todos" || entry.Get("collection") == collection) &&
                 (String.IsNullOrEmpty(category) || entry.Get("category") == category) &&
                 (String.IsNullOrEmpty(model) || entry.Get("model") == model) &&

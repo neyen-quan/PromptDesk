@@ -111,10 +111,11 @@ namespace PromptDesk
             var recordIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (XElement item in records.Elements("record"))
             {
-                Attributes(item, "id", "favorite", "hotkey", "lastUsed"); Children(item, "cell", "variables");
+                Attributes(item, "id", "favorite", "archived", "hotkey", "lastUsed"); Children(item, "cell", "variables");
                 string id = (string)item.Attribute("id");
                 if (String.IsNullOrWhiteSpace(id) || !recordIds.Add(id)) throw Invalid("El catálogo contiene identificadores inválidos o repetidos.");
                 BooleanAttribute(item, "favorite");
+                BooleanAttribute(item, "archived");
                 foreach (XElement cell in item.Elements("cell")) { Attributes(cell, "key"); TextOnly(cell); }
                 if (item.Elements("variables").Skip(1).Any()) throw Invalid("Un prompt contiene variables repetidas.");
                 XElement variables = item.Element("variables");
@@ -198,6 +199,7 @@ namespace PromptDesk
         internal static XElement EntryXml(Entry entry, bool includeUsage)
         {
             return new XElement("record", new XAttribute("id", entry.Id), new XAttribute("favorite", entry.Favorite),
+                entry.Archived ? new XAttribute("archived", true) : null,
                 new XAttribute("hotkey", entry.Hotkey), new XAttribute("lastUsed", includeUsage ? entry.LastUsed : ""),
                 entry.Cells.Where(c => c.Value.Length != 0).OrderBy(c => c.Key, StringComparer.Ordinal)
                     .Select(c => new XElement("cell", new XAttribute("key", c.Key), c.Value)),
@@ -247,6 +249,7 @@ namespace PromptDesk
                         // or a released duplicate hotkey must not duplicate an
                         // otherwise identical prompt on a retried upload.
                         chosen = WithUsage(r, l, r); chosen.Favorite = l.Favorite || r.Favorite;
+                        chosen.Archived = l.Archived || r.Archived;
                         chosen.Hotkey = r.Hotkey.Length > 0 ? r.Hotkey : l.Hotkey;
                         if (l.Hotkey.Length > 0 && r.Hotkey.Length > 0 && l.Hotkey != r.Hotkey)
                             result.Conflicts.Add("El atajo de «" + chosen.Get("name") + "» difería entre equipos; se conservó el de la cuenta.");
@@ -325,6 +328,7 @@ namespace PromptDesk
             conflict = false;
             var result = new Entry { Id = l.Id, LastUsed = Latest(l.LastUsed, r.LastUsed) };
             result.Favorite = Pick(b.Favorite, l.Favorite, r.Favorite, ref conflict);
+            result.Archived = Pick(b.Archived, l.Archived, r.Archived, ref conflict);
             result.Hotkey = Pick(b.Hotkey, l.Hotkey, r.Hotkey, ref conflict);
             foreach (string key in b.Cells.Keys.Concat(l.Cells.Keys).Concat(r.Cells.Keys).Distinct(StringComparer.Ordinal))
             {
@@ -486,6 +490,7 @@ namespace PromptDesk
             XElement l = CloudCatalog.EntryXml(left, false), r = CloudCatalog.EntryXml(right, false);
             l.Attribute("hotkey").Remove(); r.Attribute("hotkey").Remove();
             l.Attribute("favorite").Remove(); r.Attribute("favorite").Remove();
+            l.SetAttributeValue("archived", null); r.SetAttributeValue("archived", null);
             return CloudCatalog.Write(l) == CloudCatalog.Write(r);
         }
         static Entry WithUsage(Entry source, Entry left, Entry right) { var copy = CloudCatalog.Copy(source); copy.LastUsed = Latest(left.LastUsed, right.LastUsed); return copy; }

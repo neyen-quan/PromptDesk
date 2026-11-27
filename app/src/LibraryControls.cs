@@ -38,9 +38,18 @@ namespace PromptDesk
                 e.Graphics.FillPath(fill, path); e.Graphics.DrawPath(line, path);
             }
             string name = String.IsNullOrWhiteSpace(entry.Get("name")) ? "Sin título" : entry.Get("name");
-            var title = new Rectangle(bounds.Left + 13, bounds.Top + 11, Math.Max(1, bounds.Width - 43), 22);
+            var title = new Rectangle(bounds.Left + 13, bounds.Top + (entry.Archived ? 3 : 11), Math.Max(1, bounds.Width - 43), 22);
             TextRenderer.DrawText(e.Graphics, Fit(name, titleFont, title.Width), titleFont, title, UI.Ink, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            if (entry.Favorite) Glyph.Draw(e.Graphics, "star", new Rectangle(bounds.Right - 25, bounds.Top + 13, 14, 14), UI.Accent);
+            if (entry.Favorite) Glyph.Draw(e.Graphics, "star", new Rectangle(bounds.Right - 25, title.Top + 2, 14, 14), UI.Accent);
+            if (entry.Archived)
+            {
+                string location = String.Join("  /  ", new[] { entry.Get("collection"), entry.Get("category") }.Where(s => s.Length != 0));
+                TextRenderer.DrawText(e.Graphics, location, metaFont,
+                    new Rectangle(bounds.Left + 13, bounds.Top + 25, Math.Max(1, bounds.Width - 26), 19),
+                    UI.Muted, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                if ((e.State & DrawItemState.Focus) != 0) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(bounds, -3, -3), UI.Accent, UI.Selected);
+                return;
+            }
             string preview = entry.Get("description");
             if (String.IsNullOrWhiteSpace(preview)) preview = entry.Get("prompt");
             if (String.IsNullOrWhiteSpace(preview)) preview = "Escribí tu prompt en el editor…";
@@ -102,6 +111,7 @@ namespace PromptDesk
                 else if (name == "copy") { graphics.DrawRectangle(pen, 7, 6, 10, 12); graphics.DrawLines(pen, new[] { new Point(12, 3), new Point(3, 3), new Point(3, 13) }); }
                 else if (name == "library") { graphics.DrawRectangle(pen, 3, 3, 14, 14); graphics.DrawLine(pen, 7, 3, 7, 17); graphics.DrawLine(pen, 10, 7, 14, 7); graphics.DrawLine(pen, 10, 11, 14, 11); }
                 else if (name == "clock") { graphics.DrawEllipse(pen, 2, 2, 16, 16); graphics.DrawLines(pen, new[] { new Point(10, 5), new Point(10, 10), new Point(14, 12) }); }
+                else if (name == "archive") { graphics.DrawRectangle(pen, 2, 3, 16, 4); graphics.DrawRectangle(pen, 4, 7, 12, 10); graphics.DrawLine(pen, 8, 10, 12, 10); }
                 else if (name == "star")
                 {
                     var points = new PointF[10];

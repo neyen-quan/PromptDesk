@@ -88,6 +88,19 @@ namespace PromptDesk
             check(separate.Conflicts.Count == 0 && CloudCatalog.Read(separate.Xml).Entries.Count == 2, "Cambios independientes no crean copias");
             string renamed = Change(baseline, c => c.Entries[0].Set("name", "Nuevo título"));
             string edited = Change(baseline, c => c.Entries[0].Set("prompt", "Texto remoto"));
+            string archived = Change(baseline, c => c.Entries[0].Archived = true);
+            var archiveAndEdit = CloudMerge.Merge(baseline, archived, edited);
+            Entry archivedEntry = Record(archiveAndEdit.Xml, "a");
+            check(archivedEntry.Archived && archivedEntry.Get("prompt") == "Texto remoto" && archiveAndEdit.Conflicts.Count == 0,
+                "Archivar y editar desde equipos distintos conserva ambos cambios");
+            var restored = CloudMerge.Merge(archived, baseline, archiveAndEdit.Xml);
+            check(!Record(restored.Xml, "a").Archived && Record(restored.Xml, "a").Get("prompt") == "Texto remoto",
+                "Restaurar un prompt se propaga sin perder cambios del otro equipo");
+            check(CloudCatalog.Equivalent(CloudMerge.Merge(null, archived, baseline).Xml, archived) &&
+                CloudCatalog.Equivalent(CloudMerge.Merge(null, baseline, archived).Xml, archived),
+                "Una primera vinculación mantiene el archivado en ambos sentidos sin duplicar el prompt");
+            check(Rejects(() => CloudCatalog.Validate(archived.Replace("archived=\"true\"", "archived=\"error\""))),
+                "El cliente de nube detecta un estado de archivo inválido");
             var disjoint = CloudMerge.Merge(baseline, renamed, edited);
             check(Record(disjoint.Xml, "a").Get("name") == "Nuevo título" && Record(disjoint.Xml, "a").Get("prompt") == "Texto remoto" && disjoint.Conflicts.Count == 0,
                 "Cambios en campos independientes del mismo prompt se combinan");

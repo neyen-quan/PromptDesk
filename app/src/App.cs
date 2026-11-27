@@ -135,6 +135,7 @@ public partial class MainWindow:DarkForm {
   var rows=LibraryQuery.Filter(db.Entries,collection.Text,categories.SelectedIndex>0?categories.Text:null,
       model.SelectedIndex>0?model.Text:null,view.Text,search.Text,sortKey,sortDesc);
   busy=true;
+  library.ItemHeight=view.Text=="Archivados"?55:108;
   library.BeginUpdate();
   try{library.Items.Clear();library.Items.AddRange(rows.Cast<object>().ToArray());}
   finally{library.EndUpdate();}
@@ -147,11 +148,7 @@ public partial class MainWindow:DarkForm {
    if(tableMode){var row=grid.Rows.Cast<DataGridViewRow>().First(r=>((Entry)r.Tag).Id==selected.Id);row.Selected=true;grid.CurrentCell=row.Cells["copy"];}
   }
   busy=false;
-  resultCount.Text=rows.Count+" de "+db.Entries.Count+" prompts";
-  listEmpty.Visible=rows.Count==0;
-  emptyTitle.Text=db.Entries.Count==0?"Tu biblioteca empieza acá":"No encontramos ese prompt";
-  emptyHint.Text=db.Entries.Count==0?"Guardá tus ideas, ordenalas por categoría\ny reutilizalas en un clic.":"Probá otra búsqueda o quitá los filtros\npara volver a ver tu biblioteca.";
-  emptyAction.Text=db.Entries.Count==0?"Crear mi primer prompt":"Limpiar filtros";
+  UpdateLibraryHeader(rows.Count);
   ShowSelected();
   UpdateNavigation();
  }
@@ -259,9 +256,36 @@ public partial class MainWindow:DarkForm {
    tray.ShowBalloonTip(1200,"Prompt copiado",e.Get("name"),ToolTipIcon.Info);
  }
  public static bool ParseKey(string s,out uint modifiers,out uint key){modifiers=0;key=0;if(String.IsNullOrWhiteSpace(s))return false;var parts=s.Split('+').Select(p=>p.Trim()).ToArray();foreach(var p in parts.Take(parts.Length-1)){if(p.Equals("Ctrl",StringComparison.OrdinalIgnoreCase))modifiers|=2;else if(p.Equals("Alt",StringComparison.OrdinalIgnoreCase))modifiers|=1;else if(p.Equals("Shift",StringComparison.OrdinalIgnoreCase))modifiers|=4;else return false;}string last=parts.Last();if(last.StartsWith("NumPad",StringComparison.OrdinalIgnoreCase)&&last.Length==7&&Char.IsDigit(last[6]))key=(uint)(96+last[6]-'0');else return false;return modifiers!=0;}
- void Shortcut(Entry e){if(e==null)return;string value=UI.Ask(this,"Atajo global · ejemplo Ctrl+Alt+NumPad1 (vacío = quitar)",e.Hotkey);if(value==null)return;value=value.Trim();uint mods,key;if(value.Length>0){if(!ParseKey(value,out mods,out key))throw new Exception("Usá Ctrl+Alt+NumPad0 a NumPad9; también se admiten Alt o Shift.");foreach(var other in db.Entries.Where(a=>a.Id!=e.Id)){uint om,ok;if(ParseKey(other.Hotkey,out om,out ok)&&om==mods&&ok==key)throw new Exception("Ese atajo está asignado a "+other.Get("name"));}foreach(var pair in hotkeys.Where(p=>p.Value.Id==e.Id).ToList()){UnregisterHotKey(Handle,pair.Key);hotkeys.Remove(pair.Key);}if(!RegisterHotKey(Handle,999,mods|0x4000,key)){RegisterKeys();throw new Exception("Windows u otra aplicación ya usa ese atajo. Elegí otro.");}UnregisterHotKey(Handle,999);}e.Hotkey=value;Changed();Save();RegisterKeys();RefreshRows();}
- void RegisterKeys(bool showWarnings=true){if(testing)return;foreach(int id in hotkeys.Keys)UnregisterHotKey(Handle,id);hotkeys.Clear();var errors=new List<string>();int next=1;foreach(var e in db.Entries){uint mods,key;if(e.Hotkey.Length==0)continue;if(!ParseKey(e.Hotkey,out mods,out key)||!RegisterHotKey(Handle,next,mods|0x4000,key)){errors.Add(e.Get("name")+" · "+e.Hotkey);continue;}hotkeys[next++]=e;}if(!showWarnings){ReportCloudHotkeyErrors(errors);return;}if(errors.Count>0)MessageBox.Show(this,"No se pudieron activar estos atajos (inválidos u ocupados):\n"+String.Join("\n",errors.ToArray()),"Atajos no disponibles");}
- protected override void WndProc(ref Message m){if(m.Msg==0x0312&&hotkeys.ContainsKey(m.WParam.ToInt32())){var e=hotkeys[m.WParam.ToInt32()];BeginInvoke((Action)(()=>{try{Copy(e);}catch(Exception ex){MessageBox.Show(ex.Message,"No se pudo copiar");}}));}base.WndProc(ref m);}
+ void Shortcut(Entry e){
+  if(e==null)return;
+  string value=UI.Ask(this,"Atajo global · ejemplo Ctrl+Alt+NumPad1 (vacío = quitar)",e.Hotkey);
+  if(value==null)return;
+  value=value.Trim();uint mods,key;
+  if(value.Length>0){
+   if(!ParseKey(value,out mods,out key))throw new Exception("Usá Ctrl+Alt+NumPad0 a NumPad9; también se admiten Alt o Shift.");
+   foreach(var other in db.Entries.Where(a=>a.Id!=e.Id)){
+    uint om,ok;
+    if(ParseKey(other.Hotkey,out om,out ok)&&om==mods&&ok==key)throw new Exception("Ese atajo está asignado a "+other.Get("name"));
+   }
+   if(!e.Archived){
+    foreach(var pair in hotkeys.Where(p=>p.Value.Id==e.Id).ToList()){UnregisterHotKey(Handle,pair.Key);hotkeys.Remove(pair.Key);}
+    if(!RegisterHotKey(Handle,999,mods|0x4000,key)){RegisterKeys();throw new Exception("Windows u otra aplicación ya usa ese atajo. Elegí otro.");}
+    UnregisterHotKey(Handle,999);
+   }
+  }
+  e.Hotkey=value;Changed();Save();RegisterKeys();RefreshRows();
+ }
+ void RegisterKeys(bool showWarnings=true){if(testing)return;foreach(int id in hotkeys.Keys)UnregisterHotKey(Handle,id);hotkeys.Clear();var errors=new List<string>();int next=1;foreach(var e in db.Entries){uint mods,key;if(e.Archived||e.Hotkey.Length==0)continue;if(!ParseKey(e.Hotkey,out mods,out key)||!RegisterHotKey(Handle,next,mods|0x4000,key)){errors.Add(e.Get("name")+" · "+e.Hotkey);continue;}hotkeys[next++]=e;}if(!showWarnings){ReportCloudHotkeyErrors(errors);return;}if(errors.Count>0)MessageBox.Show(this,"No se pudieron activar estos atajos (inválidos u ocupados):\n"+String.Join("\n",errors.ToArray()),"Atajos no disponibles");}
+ protected override void WndProc(ref Message m){
+  Entry entry;
+  if(m.Msg==0x0312 && hotkeys.TryGetValue(m.WParam.ToInt32(),out entry)){
+   BeginInvoke((Action)(()=>{
+    if(entry.Archived||!db.Entries.Contains(entry))return;
+    try{Copy(entry);}catch(Exception ex){MessageBox.Show(ex.Message,"No se pudo copiar");}
+   }));
+  }
+  base.WndProc(ref m);
+ }
  void ManageFields(){using(var f=UI.Dialog("Columnas · arrastrá encabezados para reordenar",580,540)){var list=new CheckedListBox{Dock=DockStyle.Fill,CheckOnClick=true};UI.Style(list);foreach(var field in db.Fields)list.Items.Add(field.Title,field.Visible);var bar=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=100};bar.Controls.Add(UI.Button("+ Columna",()=>{string title=UI.Ask(f,"Nombre de columna","");if(String.IsNullOrWhiteSpace(title))return;db.Fields.Add(new Field{Id="custom_"+Guid.NewGuid().ToString("N"),Title=title});list.Items.Add(title,true);Changed();}));bar.Controls.Add(UI.Button("Renombrar",()=>{int i=list.SelectedIndex;if(i<0)return;string title=UI.Ask(f,"Nombre de columna",db.Fields[i].Title);if(String.IsNullOrWhiteSpace(title))return;db.Fields[i].Title=title;list.Items[i]=title;Changed();}));bar.Controls.Add(UI.Button("Eliminar",()=>{int i=list.SelectedIndex;if(i<0)return;var field=db.Fields[i];if(!field.Id.StartsWith("custom_")){MessageBox.Show("Las columnas base se pueden ocultar y renombrar, pero se conservan para las funciones del programa.");return;}if(!UI.Confirm(f,"¿Eliminar la columna y sus valores? El estado anterior queda en Respaldos."))return;db.Fields.RemoveAt(i);foreach(var e in db.Entries)e.Cells.Remove(field.Id);list.Items.RemoveAt(i);Changed();}));bar.Controls.Add(UI.Button("Aplicar y cerrar",()=>{for(int i=0;i<db.Fields.Count;i++)db.Fields[i].Visible=list.GetItemChecked(i);Changed();f.Close();}));f.Controls.Add(list);f.Controls.Add(bar);f.ShowDialog(this);RefreshAll();}}
  void Export(){using(var d=new SaveFileDialog{Filter="Excel (*.xlsx)|*.xlsx",FileName="Mis_prompts.xlsx"})if(d.ShowDialog(this)==DialogResult.OK){grid.EndEdit();Excel.Write(d.FileName,db);status.Text="Excel exportado: "+d.FileName;}}
  void Backups(){using(var f=UI.Dialog("Respaldos e historial recuperable",720,500)){var label=new Label{Text="Se conservan los últimos 200 estados guardados. Restaurar reemplaza el catálogo completo.\nExportá un respaldo a otra unidad para protegerte ante fallas del disco.",Dock=DockStyle.Top,Height=55};var list=new ListBox{Dock=DockStyle.Fill};UI.Style(list);foreach(var path in Directory.GetFiles(Path.Combine(db.Folder,"Historial"),"*.xml").OrderByDescending(p=>p))list.Items.Add(Path.GetFileName(path));var bar=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=100};bar.Controls.Add(UI.Button("Exportar respaldo completo",()=>{using(var d=new SaveFileDialog{Filter="Respaldo PromptDesk (*.xml)|*.xml",FileName="PromptDesk_"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".xml"})if(d.ShowDialog(f)==DialogResult.OK)db.Export(d.FileName);}));bar.Controls.Add(UI.Button("Restaurar seleccionado",()=>{if(list.SelectedItem!=null)Restore(Path.Combine(db.Folder,"Historial",list.SelectedItem.ToString()),f);}));bar.Controls.Add(UI.Button("Importar respaldo",()=>{using(var d=new OpenFileDialog{Filter="Respaldo PromptDesk (*.xml)|*.xml"})if(d.ShowDialog(f)==DialogResult.OK)Restore(d.FileName,f);}));bar.Controls.Add(UI.Button("Abrir carpeta de datos",()=>System.Diagnostics.Process.Start(db.Folder)));f.Controls.Add(list);f.Controls.Add(label);f.Controls.Add(bar);f.ShowDialog(this);}}

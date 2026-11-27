@@ -21,6 +21,9 @@ namespace PromptDesk
         TableLayoutPanel editorMetadata;
         Label editorPlaceholder, editorEmptyTitle;
         Label emptyTitle, emptyHint, saveBadge, editorSummary;
+        Label libraryHeading;
+        GlassButton categoryArchiveButton;
+        ToolStripItem archiveMenuItem;
         GlassButton emptyAction, copyButton, favoriteButton, listModeButton, tableModeButton, variablesButton, moreButton;
         TextBox entryTitle;
         ComboBox entryCollection, entryCategory, entryModel;
@@ -110,12 +113,12 @@ namespace PromptDesk
                 Dock = DockStyle.Fill, Padding = new Padding(0, 14, 13, 0),
                 Margin = new Padding(0, 0, 8, 0), BackColor = UI.Bg
             };
-            var top = new Panel { Dock = DockStyle.Top, Height = 216 };
+            var top = new Panel { Dock = DockStyle.Top, Height = 244 };
             top.Controls.Add(LabelAt("COLECCIÓN", 2, 0, 172, 23, 8, UI.Muted));
             collection = Combo(170); collection.Location = new Point(0, 28);
             collection.Items.AddRange(new object[] { "Todos", "Personales", "404" }); collection.SelectedIndex = 0;
             top.Controls.Add(collection);
-            view = Combo(170); view.Items.AddRange(new object[] { "Todos", "Favoritos", "Recientes" }); view.SelectedIndex = 0;
+            view = Combo(170); view.Items.AddRange(new object[] { "Todos", "Favoritos", "Recientes", "Archivados" }); view.SelectedIndex = 0;
             int y = 73;
             foreach (var item in new[] { "Todos", "Favoritos", "Recientes" })
             {
@@ -126,6 +129,12 @@ namespace PromptDesk
                 button.Location = new Point(0, y); button.TextAlign = ContentAlignment.MiddleLeft;
                 top.Controls.Add(button); navigation[item] = button; y += 43;
             }
+            var archive = UI.Button("Archivados", () => OpenArchive(false));
+            archive.IconName = "archive"; archive.Quiet = true; archive.AutoSize = false;
+            archive.Font = new Font("Segoe UI", 8.5f); archive.TextAlign = ContentAlignment.MiddleLeft;
+            archive.SetBounds(8, y, 164, 31);
+            tips.SetToolTip(archive, "Ver los archivados de todas las colecciones");
+            top.Controls.Add(archive); navigation.Add("Archivados", archive);
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 113 };
             bottom.Controls.Add(LabelAt("FILTRAR POR MODELO", 2, 3, 172, 22, 8, UI.Muted));
             model = Combo(170); model.Location = new Point(0, 29); model.AccessibleName = "Filtrar por modelo";
@@ -190,7 +199,8 @@ namespace PromptDesk
         {
             var card = new GlassPanel { Dock = DockStyle.Fill, Padding = new Padding(10, 12, 10, 10) };
             var heading = new Panel { Dock = DockStyle.Top, Height = 73 };
-            heading.Controls.Add(LabelAt("Biblioteca", 4, 0, 135, 29, 12, UI.Ink, FontStyle.Bold));
+            libraryHeading = LabelAt("Biblioteca", 4, 0, 135, 29, 12, UI.Ink, FontStyle.Bold);
+            heading.Controls.Add(libraryHeading);
             var modes = new FlowLayoutPanel
             {
                 Dock = DockStyle.Right, Width = 130, Height = 35, WrapContents = false, Margin = Padding.Empty
@@ -224,13 +234,22 @@ namespace PromptDesk
             drawing.Paint += (s, e) => Glyph.EmptyLibrary(e.Graphics, drawing.ClientRectangle);
             emptyTitle = new Label { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 12, FontStyle.Bold), ForeColor = UI.Ink, TextAlign = ContentAlignment.MiddleCenter };
             emptyHint = new Label { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9.5f), ForeColor = UI.Muted, TextAlign = ContentAlignment.TopCenter };
-            emptyAction = UI.Button("Crear mi primer prompt", () => { if (db.Entries.Count == 0) AddEntry(); else ResetFilters(); });
+            emptyAction = UI.Button("Crear mi primer prompt", () => {
+                if (view.Text == "Archivados") OpenArchive(false);
+                else if (db.Entries.All(entry => entry.Archived)) AddEntry();
+                else ResetFilters();
+            });
             emptyAction.Active = true; emptyAction.Dock = DockStyle.Fill;
             emptyStack.Controls.Add(drawing); emptyStack.Controls.Add(emptyTitle); emptyStack.Controls.Add(emptyHint); emptyStack.Controls.Add(emptyAction);
             listEmpty.Controls.Add(emptyStack);
             listEmpty.Resize += (s, e) => emptyStack.Location = new Point(Math.Max(0, (listEmpty.Width - emptyStack.Width) / 2), Math.Max(4, (listEmpty.Height - emptyStack.Height) / 2));
             host.Controls.Add(library); host.Controls.Add(listEmpty); listEmpty.BringToFront();
-            card.Controls.Add(host); card.Controls.Add(heading);
+            categoryArchiveButton = UI.Button("Archivados en esta categoría", () => OpenArchive(true));
+            categoryArchiveButton.Dock = DockStyle.Bottom; categoryArchiveButton.AutoSize = false;
+            categoryArchiveButton.Height = 32; categoryArchiveButton.IconName = "archive";
+            categoryArchiveButton.TextAlign = ContentAlignment.MiddleLeft; categoryArchiveButton.Quiet = true;
+            categoryArchiveButton.Font = new Font("Segoe UI", 8.5f); categoryArchiveButton.Visible = false;
+            card.Controls.Add(host); card.Controls.Add(categoryArchiveButton); card.Controls.Add(heading);
             return card;
         }
 
@@ -322,6 +341,7 @@ namespace PromptDesk
             promptMenu = NewMenu();
             MenuAction(promptMenu, "Editar ficha completa…", () => Edit(selected)); MenuAction(promptMenu, "Configurar variables…", () => Variables(selected));
             MenuAction(promptMenu, "Asignar atajo global…", () => Shortcut(selected)); MenuAction(promptMenu, "Duplicar                  Ctrl+D", Duplicate);
+            archiveMenuItem = promptMenu.Items.Add("Archivar prompt", null, (s, e) => RunAction(ToggleArchive));
             promptMenu.Items.Add(new ToolStripSeparator()); MenuAction(promptMenu, "Eliminar prompt…", Delete);
             promptMenu.Opening += (s, e) => { foreach (ToolStripItem item in promptMenu.Items) item.Enabled = selected != null; };
         }
@@ -361,7 +381,8 @@ namespace PromptDesk
             editorSummary.Top = saveBadge.Top = tableMode ? 0 : 5;
             editorSummary.Height = saveBadge.Height = tableMode ? 21 : 25;
             variablesButton.Enabled = moreButton.Enabled = hasEntry;
-            details.Text = hasEntry ? "EDITANDO PROMPT" : "TU ESPACIO DE TRABAJO";
+            archiveMenuItem.Text = hasEntry && selected.Archived ? "Restaurar prompt" : "Archivar prompt";
+            details.Text = !hasEntry ? "TU ESPACIO DE TRABAJO" : selected.Archived ? "PROMPT ARCHIVADO" : "EDITANDO PROMPT";
             FillChoiceBox(entryCollection, "collection", "", hasEntry ? selected.Get("collection") : "Personales");
             FillChoiceBox(entryCategory, "category", hasEntry ? selected.Get("collection") : "Personales", hasEntry ? selected.Get("category") : "");
             FillChoiceBox(entryModel, "model", "", hasEntry ? selected.Get("model") : "");
@@ -392,6 +413,73 @@ namespace PromptDesk
             selected.Favorite = !selected.Favorite; Changed(); RefreshRows();
         }
 
+        void ToggleArchive()
+        {
+            var item = selected;
+            if (item == null || !grid.EndEdit()) return;
+            int index = library.Items.IndexOf(item);
+            var next = index < 0 || library.Items.Count < 2 ? null :
+                (Entry)library.Items[index + 1 < library.Items.Count ? index + 1 : index - 1];
+            item.Archived = !item.Archived;
+            Changed();
+            bool saved = Save();
+            if (item.Hotkey.Length > 0) RegisterKeys(!item.Archived);
+            selected = next;
+            RefreshRows();
+            if (saved) status.Text = (item.Archived ? "Archivado" : "Restaurado") + " · " + item.Get("name");
+        }
+
+        void OpenArchive(bool currentCategory)
+        {
+            busy = true;
+            view.SelectedItem = "Archivados";
+            search.Clear();
+            if (!currentCategory)
+            {
+                collection.SelectedIndex = 0;
+                if (categories.Items.Count > 0) categories.SelectedIndex = 0;
+            }
+            if (model.Items.Count > 0) model.SelectedIndex = 0;
+            busy = false;
+            RefreshFilters(); RefreshRows();
+        }
+
+        void UpdateLibraryHeader(int visibleCount)
+        {
+            bool archived = view.Text == "Archivados";
+            int archivedCount = db.Entries.Count(e => e.Archived);
+            int total = archived ? archivedCount : db.Entries.Count - archivedCount;
+            navigation["Archivados"].Text = archivedCount == 0 ? "Archivados" : "Archivados (" + archivedCount + ")";
+            libraryHeading.Text = archived ? "Archivados" : "Biblioteca";
+            resultCount.Text = visibleCount + " de " + total + " prompts";
+            int categoryCount = !archived && categories.SelectedIndex > 0 ? db.Entries.Count(e => e.Archived &&
+                e.Get("category") == categories.Text && (collection.Text == "Todos" || e.Get("collection") == collection.Text)) : 0;
+            categoryArchiveButton.Text = "Archivados en esta categoría (" + categoryCount + ")";
+            categoryArchiveButton.Visible = categoryCount > 0;
+            listEmpty.Visible = visibleCount == 0;
+            if (visibleCount > 0) return;
+            if (archived && total == 0)
+            {
+                emptyTitle.Text = "Sin prompts archivados";
+                emptyHint.Text = "Para guardar un prompt acá, abrí su menú Más y elegí Archivar prompt.";
+                emptyAction.Visible = false;
+            }
+            else if (total == 0)
+            {
+                emptyTitle.Text = archivedCount > 0 ? "Sin prompts activos" : "Tu biblioteca empieza acá";
+                emptyHint.Text = archivedCount > 0 ? "Podés recuperar un prompt desde Archivados." : "Guardá tus ideas, ordenalas por categoría\ny reutilizalas en un clic.";
+                emptyAction.Text = archivedCount > 0 ? "Crear un prompt" : "Crear mi primer prompt";
+                emptyAction.Visible = true;
+            }
+            else
+            {
+                emptyTitle.Text = "No encontramos ese prompt";
+                emptyHint.Text = "Probá otra búsqueda o quitá los filtros.";
+                emptyAction.Text = "Limpiar filtros";
+                emptyAction.Visible = true;
+            }
+        }
+
         void CommitMetadata(string key, ComboBox box)
         {
             if (busy || selected == null) return;
@@ -410,7 +498,7 @@ namespace PromptDesk
         void RevealEntry(Entry item)
         {
             busy = true;
-            search.Clear(); view.SelectedIndex = 0; collection.SelectedItem = item.Get("collection");
+            search.Clear(); view.SelectedItem = item.Archived ? "Archivados" : "Todos"; collection.SelectedItem = item.Get("collection");
             categories.SelectedIndex = categories.Items.Count > 0 ? 0 : -1;
             model.SelectedIndex = model.Items.Count > 0 ? 0 : -1;
             selected = item; busy = false; RefreshAll();

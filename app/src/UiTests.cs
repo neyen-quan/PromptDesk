@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Drawing;
@@ -61,8 +62,7 @@ namespace PromptDesk
             Pump(80);
             using (var bitmap = new Bitmap(window.Width, window.Height))
             {
-                using (var graphics = Graphics.FromImage(bitmap))
-                    graphics.CopyFromScreen(window.Location, Point.Empty, window.Size);
+                window.DrawToBitmap(bitmap, new Rectangle(Point.Empty, window.Size));
                 bitmap.Save(Path.Combine(folder, name + ".png"), ImageFormat.Png);
             }
         }
@@ -158,6 +158,92 @@ namespace PromptDesk
             Call(window, "ReportCloudHotkeyErrors", (object)errors);
             Check(notices.Count == 1, "Un nuevo fallo del atajo después de resolverse queda oculto");
             notices.Clear();
+        }
+
+        static void ArchiveNavigation(string folder, string outputFolder)
+        {
+            var store = new Store(folder);
+            store.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed.xml"));
+            var target = new Entry { Favorite = true, LastUsed = DateTime.UtcNow.ToString("o"), Hotkey = "Alt+NumPad1" };
+            target.Set("name", "Estudio de luz");
+            target.Set("collection", "Personales");
+            target.Set("category", "Fotografía");
+            target.Set("prompt", "Detalle {{luz}}");
+            target.Variables.Add(new Variable { Token = "{{luz}}", Value = "natural" });
+            var archived404 = new Entry { Archived = true };
+            archived404.Set("name", "Movimiento");
+            archived404.Set("collection", "404");
+            archived404.Set("category", "Video");
+            archived404.Set("prompt", "Una toma continua con movimiento lateral.");
+            var active = new Entry();
+            active.Set("name", "Otro diseño");
+            active.Set("collection", "Personales");
+            active.Set("category", "Fotografía");
+            active.Set("prompt", "Iluminación natural desde la izquierda.");
+            store.Entries.AddRange(new[] { target, archived404, active });
+            store.Save();
+            string original = target.Xml().ToString();
+
+            using (var window = new MainWindow(store, true))
+            {
+                window.Show(); window.Size = new Size(1100, 700); Pump(80);
+                var nav = Field<Dictionary<string, GlassButton>>(window, "navigation");
+                var menu = Field<ToolStripItem>(window, "archiveMenuItem");
+                var library = Field<ListBox>(window, "library");
+                var grid = Field<DataGridView>(window, "grid");
+                var search = Field<TextBox>(window, "search");
+                int normalItemHeight = library.ItemHeight;
+                library.SelectedItem = target;
+                Check(menu.Text == "Archivar prompt" && library.Items.Count == 2, "La biblioteca activa ofrece archivar el prompt seleccionado");
+                menu.PerformClick();
+                Wait(() => !library.Items.Contains(target) && library.Items.Count == 1, "Archivar oculta el prompt en la lista activa");
+                var reopened = new Store(folder);
+                reopened.Load(reopened.Pathname);
+                Check(reopened.Entries.Count == 3 && reopened.Entries.Single(e => e.Id == target.Id).Archived, "El archivo persiste al reabrir el catálogo");
+                nav["Favoritos"].PerformClick();
+                Check(library.Items.Count == 0, "Un favorito archivado sale del acceso a favoritos");
+                nav["Recientes"].PerformClick();
+                Check(library.Items.Count == 0, "Un reciente archivado sale del acceso a recientes");
+                nav["Todos"].PerformClick();
+                Field<GlassButton>(window, "tableModeButton").PerformClick();
+                Check(grid.Rows.Count == 1 && ((Entry)grid.Rows[0].Tag).Id == active.Id, "La tabla activa excluye los archivados");
+
+                Field<ComboBox>(window, "collection").SelectedItem = "Personales";
+                Field<ListBox>(window, "categories").SelectedItem = "Fotografía";
+                var categoryArchive = Field<GlassButton>(window, "categoryArchiveButton");
+                Visible(window, "categoryArchiveButton");
+                var archiveBounds = categoryArchive.RectangleToScreen(categoryArchive.ClientRectangle);
+                foreach (string mode in new[] { "listModeButton", "tableModeButton" })
+                {
+                    var button = Field<GlassButton>(window, mode);
+                    Check(!archiveBounds.IntersectsWith(button.RectangleToScreen(button.ClientRectangle)),
+                        "El acceso a los archivados de la categoría deja libre el selector de vista " + mode);
+                }
+                Capture(window, outputFolder, "categoria-con-archivados");
+                search.Text = "Otro diseño";
+                categoryArchive.PerformClick();
+                Wait(() => grid.Rows.Count == 1 && ((Entry)grid.Rows[0].Tag).Id == target.Id,
+                    "El acceso de la categoría recupera sus archivados incluso con una búsqueda previa");
+                nav["Archivados"].PerformClick();
+                Wait(() => grid.Rows.Count == 2, "El acceso a Archivados reúne ambas colecciones aunque hubiera filtros");
+                Check(grid.Rows.Cast<DataGridViewRow>().Select(row => ((Entry)row.Tag).Id).OrderBy(id => id)
+                    .SequenceEqual(new[] { target.Id, archived404.Id }.OrderBy(id => id)), "La carpeta reúne únicamente los prompts archivados");
+                Field<GlassButton>(window, "listModeButton").PerformClick();
+                Check(library.Items.Contains(target) && library.Items.Contains(archived404), "El archivo muestra ambos prompts también en Lista");
+                Check(library.ItemHeight < normalItemHeight, "Las filas de Archivados usan menos espacio que las de la biblioteca activa");
+                library.SelectedItem = target;
+                Capture(window, outputFolder, "carpeta-archivados");
+                Field<GlassButton>(window, "tableModeButton").PerformClick();
+                Check(menu.Text == "Restaurar prompt" && Field<Entry>(window, "selected").Id == target.Id, "La tabla de archivados ofrece restaurar el prompt seleccionado");
+                menu.PerformClick();
+                Check(target.Xml().ToString() == original, "Restaurar conserva el registro original, su ubicación, variables, favorito y atajo");
+                Call(window, "UndoChange", false);
+                Check(store.Entries.Single(e => e.Id == target.Id).Archived, "Deshacer la restauración devuelve el prompt al archivo");
+                Call(window, "UndoChange", true);
+                nav["Favoritos"].PerformClick();
+                Check(grid.Rows.Count == 1 && ((Entry)grid.Rows[0].Tag).Id == target.Id, "Rehacer la restauración recupera el favorito en su vista habitual");
+                window.Close();
+            }
         }
 
         public static void Run(string outputFolder)
@@ -367,6 +453,7 @@ namespace PromptDesk
                     window.Close();
                 }
 
+                ArchiveNavigation(Path.Combine(temp, "archivados"), outputFolder);
                 var empty = new Store(Path.Combine(temp, "empty"));
                 empty.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed.xml"));
                 using (var window = new MainWindow(empty, true))

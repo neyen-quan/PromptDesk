@@ -45,6 +45,9 @@ namespace PromptDesk
         {
             Store database = EmptyStore(folder);
             database.Entries.Add(Prompt("Original", "Personales", "Prueba", "Modelo", "Texto intacto"));
+            check(database.Entries[0].Xml().Attribute("archived") == null &&
+                !Entry.Read(XElement.Parse("<record id='anterior'/>")).Archived,
+                "Los prompts existentes y nuevos empiezan activos");
             database.Save();
             byte[] bytes = File.ReadAllBytes(database.Pathname);
             string state = database.Document().ToString();
@@ -84,8 +87,14 @@ namespace PromptDesk
             check(reread.Entries[0].Get("note") == database.Entries[0].Get("note"),
                 "Guardar/cargar elimina un campo que contiene solo espacios");
             string fullBackup = Path.Combine(folder, "exported-backup.xml");
+            database.Entries[0].Archived = true;
             database.Export(fullBackup);
             reread.Load(fullBackup);
+            Entry archived = reread.Entries[0];
+            check(archived.Archived && archived.Id == database.Entries[0].Id &&
+                archived.Get("collection") == "Personales" && archived.Get("category") == "Prueba",
+                "El respaldo XML conserva el estado archivado, identidad y carpeta de origen");
+            check(!archived.Clone().Archived && archived.Archived, "Duplicar un prompt archivado crea una copia activa");
             check(reread.Entries[0].Get("prompt") == database.Entries[0].Get("prompt") &&
                 reread.Entries[0].Get("note") == database.Entries[0].Get("note"),
                 "Exportar un respaldo modifica saltos de línea o espacios");

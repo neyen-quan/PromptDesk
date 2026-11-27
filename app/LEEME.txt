@@ -11,6 +11,9 @@ Elegí una colección o categoría a la izquierda y un prompt en la lista centra
 El editor de la derecha permite trabajar con el texto y sus datos.
 La búsqueda admite varias palabras y no distingue tildes ni mayúsculas.
 Todos, Favoritos y Recientes permiten encontrar tus plantillas más rápido.
+En Más > Archivar prompt podés guardar una plantilla para consultar más adelante.
+Archivados reúne los prompts de todas tus colecciones. Restaurar prompt vuelve
+a mostrar la plantilla en su categoría y reactiva su atajo si lo tenía asignado.
 La vista Tabla conserva las columnas personalizadas y su edición.
 Copiar prompt copia el texto completo. Las variables se completan al copiar.
 En Variables, seleccioná el marcador y abrí Editar opciones. Agregá cada nombre

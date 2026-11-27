@@ -77,8 +77,8 @@ foreach ($base in $publishedBases) {
 $notes=@"
 PromptDesk $version
 
-- El editor muestra los párrafos y las líneas en blanco de los prompts importados.
-- Copiar prompt conserva los saltos de línea en Windows, incluso dentro de un reemplazo de variable.
+- Archivar y restaurar prompts desde su ficha.
+- Archivados reúne el histórico de todas las colecciones y permite buscar por categoría.
 - Las nuevas compilaciones se instalan directamente en la PC.
 - Parche acumulativo comprobado desde las versiones publicadas 1.1.3 y posteriores.
 - El catálogo y los respaldos locales se conservan. No se incluyen prompts personales en esta descarga.

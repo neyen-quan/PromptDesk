@@ -51,7 +51,7 @@ namespace PromptDesk
     public class Entry
     {
         public string Id = Guid.NewGuid().ToString(), Hotkey = "", LastUsed = "";
-        public bool Favorite;
+        public bool Favorite, Archived;
         public Dictionary<string, string> Cells = new Dictionary<string, string>();
         public List<Variable> Variables = new List<Variable>();
 
@@ -70,6 +70,7 @@ namespace PromptDesk
         {
             return new XElement("record",
                 new XAttribute("id", Id), new XAttribute("favorite", Favorite),
+                Archived ? new XAttribute("archived", true) : null,
                 new XAttribute("hotkey", Hotkey), new XAttribute("lastUsed", LastUsed),
                 Cells.Select(cell => new XElement("cell", new XAttribute("key", cell.Key), cell.Value)),
                 new XElement("variables", Variables.Select(variable => variable.Xml())));
@@ -81,6 +82,7 @@ namespace PromptDesk
             {
                 Id = (string)element.Attribute("id") ?? Guid.NewGuid().ToString(),
                 Favorite = (string)element.Attribute("favorite") == "true",
+                Archived = (string)element.Attribute("archived") == "true",
                 Hotkey = (string)element.Attribute("hotkey") ?? "",
                 LastUsed = (string)element.Attribute("lastUsed") ?? ""
             };
@@ -105,6 +107,7 @@ namespace PromptDesk
             clone.Id = Guid.NewGuid().ToString();
             clone.Hotkey = "";
             clone.LastUsed = "";
+            clone.Archived = false;
             return clone;
         }
     }
